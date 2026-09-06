@@ -8,6 +8,7 @@
     "build": "npm run build:chrome && npm run build:firefox",
     "build:chrome": "node scripts/build.js chrome",
     "build:firefox": "node scripts/build.js firefox",
+    "pack": "node scripts/package-zip.js",
     "test": "vitest run",
     "test:watch": "vitest"
   },

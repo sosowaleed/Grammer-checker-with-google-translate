@@ -99,20 +99,45 @@ npm run build:firefox
 
 The output will be generated in `dist/chrome` and `dist/firefox`.
 
+### 3. Package into Distributable Zips (Optional)
+```bash
+npm run pack
+```
+This generates:
+- `dist/polyglot-grammar-chrome-v1.1.0.zip` (ready for Chrome Web Store)
+- `dist/polyglot-grammar-firefox-v1.1.0.zip` (ready for Firefox Add-ons AMO)
+
 ---
 
-## 📦 Loading into Browsers
+## 📦 Loading & Packing into Browsers
 
 ### Google Chrome / Chromium / Edge / Brave
+
+#### Method 1: Load Unpacked (Development)
 1. Open `chrome://extensions/` in your browser.
-2. Enable **Developer mode** toggle in the top-right corner.
-3. Click **Load unpacked**.
-4. Select the `dist/chrome` directory from this repository.
+2. Enable the **Developer mode** toggle in the top-right corner.
+3. Click the **Load unpacked** button at the top-left.
+4. Select the `dist/chrome` folder in this repository.
+5. *Tip:* Always refresh any web page tabs that were already open before you loaded or reloaded the extension.
+
+#### Method 2: Pack into `.crx`
+1. Go to `chrome://extensions/` with **Developer mode** turned on.
+2. Click **Pack extension**.
+3. Select `dist/chrome` as the extension root directory.
+4. Leave the private key blank on first run (Chrome generates a `.pem` key).
+5. Click **Pack Extension**. Chrome generates `chrome.crx` and `chrome.pem`.
 
 ### Mozilla Firefox
+
+#### Method 1: Load Temporary Add-on
 1. Open `about:debugging#/runtime/this-firefox` in Firefox.
-2. Click **Load Temporary Add-on...**
+2. Click **Load Temporary Add-on...**.
 3. Select `dist/firefox/manifest.json`.
+
+#### Method 2: Permanent XPI Installation
+1. Run `npm run pack`.
+2. Rename `dist/polyglot-grammar-firefox-v1.1.0.zip` to `.xpi`.
+3. In Firefox Developer Edition / Nightly with `xpinstall.signatures.required = false` in `about:config`, drag and drop the `.xpi` file directly into Firefox to install permanently.
 
 ---
 
