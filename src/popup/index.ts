@@ -1,6 +1,31 @@
-import browser from 'webextension-polyfill';
-import { UserSettings } from '../shared/types';
+import { UserSettings, DEFAULT_SETTINGS } from '../shared/types';
 import { SUPPORTED_LANGUAGES, POPULAR_LANGUAGES } from '../shared/languages';
+
+function sendPopupMessage<T = any>(message: any): Promise<T> {
+  return new Promise((resolve) => {
+    try {
+      if (typeof chrome !== 'undefined' && chrome.runtime?.sendMessage) {
+        chrome.runtime.sendMessage(message, (response) => {
+          if (chrome.runtime.lastError) {
+            resolve({ error: chrome.runtime.lastError.message } as any);
+          } else {
+            resolve(response);
+          }
+        });
+        return;
+      }
+      if (typeof (window as any).browser !== 'undefined' && (window as any).browser?.runtime?.sendMessage) {
+        (window as any).browser.runtime.sendMessage(message).then(resolve).catch((err: any) => {
+          resolve({ error: err?.message } as any);
+        });
+        return;
+      }
+      resolve({ error: 'Runtime unavailable' } as any);
+    } catch (err: any) {
+      resolve({ error: err?.message } as any);
+    }
+  });
+}
 
 document.addEventListener('DOMContentLoaded', async () => {
   const masterToggle = document.getElementById('masterToggle') as HTMLInputElement;
@@ -35,24 +60,17 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Fetch current settings
   let settings: UserSettings;
   try {
-    settings = await browser.runtime.sendMessage({ type: 'GET_SETTINGS' });
+    const fetched = await sendPopupMessage<UserSettings>({ type: 'GET_SETTINGS' });
+    settings = fetched && fetched.enabled !== undefined ? { ...DEFAULT_SETTINGS, ...fetched } : { ...DEFAULT_SETTINGS };
   } catch {
-    settings = {
-      enabled: true,
-      preferredLanguage: 'es',
-      autoCheckGrammar: true,
-      ignoredDomains: [],
-      theme: 'dark',
-      debounceMs: 450,
-      stats: { wordsChecked: 0, correctionsAccepted: 0, translationsPerformed: 0 }
-    };
+    settings = { ...DEFAULT_SETTINGS };
   }
 
   // Update UI with settings
   function updateUI() {
     masterToggle.checked = settings.enabled;
     grammarToggle.checked = settings.autoCheckGrammar;
-    languageSelect.value = settings.preferredLanguage || 'es';
+    languageSelect.value = settings.preferredLanguage || 'en';
 
     if (settings.enabled) {
       statusPill.classList.remove('disabled');
@@ -96,10 +114,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   async function saveSettings() {
     try {
-      settings = await browser.runtime.sendMessage({
+      const updated = await sendPopupMessage<UserSettings>({
         type: 'UPDATE_SETTINGS',
         settings
       });
+      if (updated && updated.enabled !== undefined) {
+        settings = { ...settings, ...updated };
+      }
       updateUI();
     } catch {
       // ignore
@@ -141,20 +162,20 @@ document.addEventListener('DOMContentLoaded', async () => {
   let sampleIndex = 0;
   const samples = [
     {
-      text: 'yo tengo un perro amariyo y quiero comer una pome',
+      text: 'This is a exampel of speling eror and bad grammer.',
+      label: 'Load Spanish sample'
+    },
+    {
+      text: 'yo tengo un perro amariyo y quiero comer una pome.',
       label: 'Load German sample'
     },
     {
-      text: 'Ich habe ein feler gemacht und bin muede',
+      text: 'Ich habe ein feler gemacht und bin muede.',
       label: 'Load French sample'
     },
     {
-      text: 'Je suis alle au cinema et je mange une pome',
+      text: 'Je suis alle au cinema et je mange une pome.',
       label: 'Load English sample'
-    },
-    {
-      text: 'This is a exampel of speling eror and grammatical mistake',
-      label: 'Load Spanish sample'
     }
   ];
 

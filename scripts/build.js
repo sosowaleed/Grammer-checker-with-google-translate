@@ -26,46 +26,38 @@ async function runBuild() {
     }
   });
 
-  // Move index.html from root if needed
+  // Move index.html to popup.html if needed
   if (fs.existsSync(resolve(outDir, 'index.html'))) {
     fs.renameSync(resolve(outDir, 'index.html'), resolve(outDir, 'popup.html'));
   }
 
-  // 2. Build Content Script as standalone IIFE (no imports, works 100% in content_scripts)
+  // 2. Build Content Script as standalone pure IIFE (no library export, zero undefined references)
   await build({
     configFile: false,
     build: {
       outDir: outDir,
       emptyOutDir: false,
-      lib: {
-        entry: resolve('src/content/index.ts'),
-        name: 'PolyglotContent',
-        formats: ['iife'],
-        fileName: () => 'content.js'
-      },
       rollupOptions: {
+        input: resolve('src/content/index.ts'),
         output: {
-          extend: true
+          format: 'iife',
+          entryFileNames: 'content.js'
         }
       }
     }
   });
 
-  // 3. Build Background Script as standalone IIFE (universal for Chrome service worker & Firefox scripts)
+  // 3. Build Background Script as standalone pure IIFE
   await build({
     configFile: false,
     build: {
       outDir: outDir,
       emptyOutDir: false,
-      lib: {
-        entry: resolve('src/background/index.ts'),
-        name: 'PolyglotBackground',
-        formats: ['iife'],
-        fileName: () => 'background.js'
-      },
       rollupOptions: {
+        input: resolve('src/background/index.ts'),
         output: {
-          extend: true
+          format: 'iife',
+          entryFileNames: 'background.js'
         }
       }
     }

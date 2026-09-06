@@ -18,9 +18,16 @@ const translationCache = new LRUCache<TranslateResponse>(300, 'polyglot_translat
 // Helpers for Settings
 async function getStoredSettings(): Promise<UserSettings> {
   try {
-    const data = await browser.storage.local.get('polyglot_settings');
-    if (data && data.polyglot_settings) {
-      return { ...DEFAULT_SETTINGS, ...data.polyglot_settings };
+    const storageApi =
+      typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local
+        ? chrome.storage.local
+        : browser.storage?.local;
+
+    if (storageApi) {
+      const data = await storageApi.get('polyglot_settings');
+      if (data && data.polyglot_settings) {
+        return { ...DEFAULT_SETTINGS, ...data.polyglot_settings };
+      }
     }
   } catch {
     // fallback to defaults
@@ -39,7 +46,13 @@ async function updateStoredSettings(newSettings: Partial<UserSettings>): Promise
     }
   };
   try {
-    await browser.storage.local.set({ polyglot_settings: updated });
+    const storageApi =
+      typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local
+        ? chrome.storage.local
+        : browser.storage?.local;
+    if (storageApi) {
+      await storageApi.set({ polyglot_settings: updated });
+    }
   } catch {
     // ignore storage errors
   }
@@ -62,39 +75,51 @@ async function recordStat(stat: keyof UserSettings['stats'], count: number = 1):
 // Setup Context Menus
 function setupContextMenus(): void {
   try {
-    browser.contextMenus.removeAll().then(() => {
-      browser.contextMenus.create({
+    const contextMenusApi =
+      typeof chrome !== 'undefined' && chrome.contextMenus
+        ? chrome.contextMenus
+        : browser.contextMenus;
+
+    if (!contextMenusApi) return;
+
+    contextMenusApi.removeAll(() => {
+      contextMenusApi.create({
         id: 'polyglot-translate-selection',
         title: 'Translate selection with PolyglotGrammar',
         contexts: ['selection']
       });
-    }).catch(() => {});
+    });
   } catch {
     // Context menus may fail if permission is restricted or re-running
   }
 }
 
 // Context Menu Listener
-if (typeof browser !== 'undefined' && browser.contextMenus) {
+if (typeof chrome !== 'undefined' && chrome.contextMenus?.onClicked) {
+  chrome.contextMenus.onClicked.addListener(async (info, tab) => {
+    if (info.menuItemId === 'polyglot-translate-selection' && info.selectionText && tab?.id) {
+      try {
+        chrome.tabs.sendMessage(tab.id, {
+          type: 'OPEN_TRANSLATE_POPUP',
+          selectedText: info.selectionText
+        });
+      } catch {}
+    }
+  });
+} else if (typeof browser !== 'undefined' && browser.contextMenus?.onClicked) {
   browser.contextMenus.onClicked.addListener(async (info, tab) => {
-    if (info.menuItemId === 'polyglot-translate-selection' && info.selectionText && tab && tab.id) {
+    if (info.menuItemId === 'polyglot-translate-selection' && info.selectionText && tab?.id) {
       try {
         await browser.tabs.sendMessage(tab.id, {
           type: 'OPEN_TRANSLATE_POPUP',
           selectedText: info.selectionText
         });
-      } catch {
-        // Tab may not have content script loaded
-      }
+      } catch {}
     }
   });
 }
 
-// Runtime Message Listener
-browser.runtime.onMessage.addListener((message: ExtensionMessage, sender): Promise<any> => {
-  return handleMessage(message, sender);
-});
-
+// Core Message Handler
 async function handleMessage(message: ExtensionMessage, sender: any): Promise<any> {
   if (!message || !message.type) return null;
 
@@ -102,16 +127,21 @@ async function handleMessage(message: ExtensionMessage, sender: any): Promise<an
     case 'CHECK_TEXT': {
       const text = message.text || '';
       if (!text.trim() || text.trim().length < 2) {
-        return { corrections: [], detectedLanguage: 'auto' } as CheckTextResponse;
+        return { corrections: [], detectedLanguage: 'en' } as CheckTextResponse;
       }
 
       const settings = await getStoredSettings();
       if (!settings.enabled || !settings.autoCheckGrammar) {
-        return { corrections: [], detectedLanguage: 'auto' } as CheckTextResponse;
+        return { corrections: [], detectedLanguage: 'en' } as CheckTextResponse;
       }
 
-      const fallbackLang = message.language || settings.preferredLanguage || 'es';
-      const cacheKey = `${text.trim()}:${fallbackLang}`;
+      // Dynamic language target:
+      // When text is in English, cross-translating to 'es' triggers Google's query correction (dt=qc).
+      // When text is non-English, cross-translating to 'en' triggers Google's query correction (dt=qc).
+      // If language was explicitly passed, respect it, otherwise default to smart cross-language pair.
+      const currentTarget = message.language || settings.preferredLanguage || 'en';
+      const fallbackTarget = currentTarget === 'en' ? 'es' : 'en';
+      const cacheKey = `${text.trim()}:${currentTarget}:${fallbackTarget}`;
 
       // Check LRU Cache first
       const cached = textCheckCache.get(cacheKey);
@@ -120,7 +150,7 @@ async function handleMessage(message: ExtensionMessage, sender: any): Promise<an
       }
 
       try {
-        const result = await GoogleTranslateService.checkText(text, fallbackLang);
+        const result = await GoogleTranslateService.checkText(text, fallbackTarget);
         const response: CheckTextResponse = {
           corrections: result.corrections,
           detectedLanguage: result.detectedLanguage
@@ -135,7 +165,7 @@ async function handleMessage(message: ExtensionMessage, sender: any): Promise<an
       } catch (err: any) {
         return {
           corrections: [],
-          detectedLanguage: 'auto',
+          detectedLanguage: 'en',
           error: err?.message || 'Check failed'
         } as CheckTextResponse;
       }
@@ -144,7 +174,7 @@ async function handleMessage(message: ExtensionMessage, sender: any): Promise<an
     case 'GET_SYNONYMS': {
       const word = (message.word || '').trim();
       if (!word) {
-        return { word: '', synonyms: [], detectedLanguage: 'auto' } as SynonymsResponse;
+        return { word: '', synonyms: [], detectedLanguage: 'en' } as SynonymsResponse;
       }
 
       const settings = await getStoredSettings();
@@ -170,7 +200,7 @@ async function handleMessage(message: ExtensionMessage, sender: any): Promise<an
         return {
           word,
           synonyms: [],
-          detectedLanguage: 'auto',
+          detectedLanguage: 'en',
           error: err?.message || 'Lookup failed'
         } as SynonymsResponse;
       }
@@ -178,7 +208,7 @@ async function handleMessage(message: ExtensionMessage, sender: any): Promise<an
 
     case 'TRANSLATE_TEXT': {
       const text = (message.text || '').trim();
-      const targetLang = message.targetLang || 'en';
+      const targetLang = message.targetLang || 'es';
       const sourceLang = message.sourceLang || 'auto';
 
       if (!text) {
@@ -235,13 +265,40 @@ async function handleMessage(message: ExtensionMessage, sender: any): Promise<an
   }
 }
 
-// Lifecycle events
-browser.runtime.onInstalled.addListener(() => {
-  setupContextMenus();
-});
+// Universal Message Listener (Chrome & Firefox compatible with async sendResponse)
+const universalMessageListener = (
+  message: ExtensionMessage,
+  sender: any,
+  sendResponse: (res?: any) => void
+) => {
+  handleMessage(message, sender)
+    .then((result) => {
+      try {
+        sendResponse(result);
+      } catch {}
+    })
+    .catch((err) => {
+      try {
+        sendResponse({ error: err?.message || 'Error processing request' });
+      } catch {}
+    });
 
-browser.runtime.onStartup.addListener(() => {
-  setupContextMenus();
-});
+  return true; // Keeps channel open in Chrome Service Worker!
+};
+
+if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
+  chrome.runtime.onMessage.addListener(universalMessageListener);
+} else if (typeof browser !== 'undefined' && browser.runtime?.onMessage) {
+  browser.runtime.onMessage.addListener(universalMessageListener);
+}
+
+// Lifecycle events
+if (typeof chrome !== 'undefined' && chrome.runtime?.onInstalled) {
+  chrome.runtime.onInstalled.addListener(() => setupContextMenus());
+  chrome.runtime.onStartup?.addListener(() => setupContextMenus());
+} else if (typeof browser !== 'undefined' && browser.runtime?.onInstalled) {
+  browser.runtime.onInstalled.addListener(() => setupContextMenus());
+  browser.runtime.onStartup?.addListener(() => setupContextMenus());
+}
 
 setupContextMenus();

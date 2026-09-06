@@ -1,40 +1,42 @@
-import browser from 'webextension-polyfill';
 import { ShadowRootHost } from './shadow-root';
 import { isEditableElement, isElementIgnored } from './tag-filter';
 import { OverlayManager } from './overlay-manager';
 import { SelectionPopup } from './selection-popup';
-import { UserSettings, CheckTextResponse } from '../shared/types';
+import { UserSettings, CheckTextResponse, DEFAULT_SETTINGS, ExtensionMessage } from '../shared/types';
+
+import { sendRuntimeMessage } from '../shared/messaging';
 
 class PolyglotContentScript {
   private overlayManager: OverlayManager;
   private debounceTimer: ReturnType<typeof setTimeout> | null = null;
-  private currentSettings: UserSettings | null = null;
+  private currentSettings: UserSettings = { ...DEFAULT_SETTINGS };
   private activeElement: HTMLElement | null = null;
+  private currentDetectedLanguage: string = 'en';
 
   constructor() {
-    // Ensure Shadow DOM host is instantiated
+    // 1. Instantiate Shadow Root host immediately
     ShadowRootHost.getInstance();
     this.overlayManager = new OverlayManager();
 
-    this.init();
-  }
-
-  private async init(): Promise<void> {
-    try {
-      this.currentSettings = await browser.runtime.sendMessage({ type: 'GET_SETTINGS' });
-    } catch {
-      // fallback
-    }
-
-    // Check if current domain is ignored
-    const host = window.location.hostname.toLowerCase();
-    if (this.currentSettings?.ignoredDomains?.some((d) => host.includes(d.toLowerCase()))) {
-      return;
-    }
-
+    // 2. Setup listeners immediately (synchronously, zero delay)
     this.setupTypingObserver();
     this.setupSelectionObserver();
     this.setupMessageListener();
+
+    // 3. Fetch user settings asynchronously without blocking
+    this.fetchSettings();
+  }
+
+  private async fetchSettings(): Promise<void> {
+    try {
+      const settings = await sendRuntimeMessage<UserSettings>({ type: 'GET_SETTINGS' });
+      if (settings && typeof settings.enabled === 'boolean') {
+        this.currentSettings = { ...DEFAULT_SETTINGS, ...settings };
+        this.currentDetectedLanguage = this.currentSettings.preferredLanguage || 'en';
+      }
+    } catch {
+      // Keep defaults
+    }
   }
 
   private setupTypingObserver(): void {
@@ -55,9 +57,22 @@ class PolyglotContentScript {
       }, debounceDelay);
     };
 
+    // Attach to input events
     document.addEventListener('input', handleInput, { capture: true, passive: true });
 
-    // Clear overlay on blur (unless focusing into popover)
+    // Also check on focus if field already has content
+    document.addEventListener('focusin', (e) => {
+      const target = e.target as HTMLElement | null;
+      if (target && isEditableElement(target)) {
+        this.activeElement = target;
+        const text = this.getElementText(target);
+        if (text.trim().length >= 2) {
+          setTimeout(() => this.checkElementText(target), 150);
+        }
+      }
+    }, { capture: true, passive: true });
+
+    // Clear overlay on blur (unless clicking into suggestion popup)
     document.addEventListener(
       'focusout',
       (e) => {
@@ -65,48 +80,62 @@ class PolyglotContentScript {
         if (related && related.closest('grammar-checker-root')) {
           return;
         }
-        // Small delay in case user clicked an overlay marker
         setTimeout(() => {
           if (document.activeElement !== this.activeElement) {
             this.overlayManager.clear();
           }
-        }, 200);
+        }, 220);
       },
       { capture: true, passive: true }
     );
   }
 
+  private getElementText(element: HTMLElement): string {
+    if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement) {
+      return element.value;
+    } else if (element.isContentEditable) {
+      return element.innerText || element.textContent || '';
+    }
+    return '';
+  }
+
   private async checkElementText(element: HTMLElement): Promise<void> {
     if (!document.contains(element)) return;
 
-    let text = '';
-    if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement) {
-      text = element.value;
-    } else if (element.isContentEditable) {
-      text = element.innerText || element.textContent || '';
+    // Check if domain is ignored
+    const host = window.location.hostname.toLowerCase();
+    if (this.currentSettings?.ignoredDomains?.some((d) => host.includes(d.toLowerCase()))) {
+      this.overlayManager.clear();
+      return;
     }
 
+    const text = this.getElementText(element);
     if (!text.trim() || text.trim().length < 2) {
       this.overlayManager.clear();
       return;
     }
 
     try {
-      const response: CheckTextResponse = await browser.runtime.sendMessage({
+      const response = await sendRuntimeMessage<CheckTextResponse>({
         type: 'CHECK_TEXT',
         text,
-        language: this.currentSettings?.preferredLanguage || 'es'
+        language: this.currentDetectedLanguage || this.currentSettings.preferredLanguage || 'en'
       });
 
       if (response && Array.isArray(response.corrections)) {
+        // Dynamically adapt language based on what user is typing!
+        if (response.detectedLanguage && response.detectedLanguage !== 'auto') {
+          this.currentDetectedLanguage = response.detectedLanguage;
+        }
+
         this.overlayManager.setCorrections(
           element,
           response.corrections,
-          response.detectedLanguage
+          this.currentDetectedLanguage
         );
       }
     } catch {
-      // User rule: Silently back off without blocking user typing
+      // Silently back off
     }
   }
 
@@ -124,7 +153,7 @@ class PolyglotContentScript {
         }
 
         SelectionPopup.handleSelection(sel);
-      }, 15);
+      }, 20);
     };
 
     document.addEventListener('mouseup', handleSelectionChange, { passive: true });
@@ -136,23 +165,28 @@ class PolyglotContentScript {
   }
 
   private setupMessageListener(): void {
-    browser.runtime.onMessage.addListener((message: any) => {
-      if (message.type === 'OPEN_TRANSLATE_POPUP') {
+    const messageHandler = (message: any) => {
+      if (message && message.type === 'OPEN_TRANSLATE_POPUP') {
         const sel = window.getSelection();
         let rect: DOMRect;
         if (sel && !sel.isCollapsed && sel.rangeCount > 0) {
           rect = sel.getRangeAt(0).getBoundingClientRect();
         } else {
-          // Fallback to center screen
           rect = new DOMRect(window.innerWidth / 2 - 150, 100, 300, 50);
         }
         SelectionPopup.openCard(message.selectedText || '', rect, 'translate');
       }
-    });
+    };
+
+    if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
+      chrome.runtime.onMessage.addListener(messageHandler);
+    } else if (typeof (window as any).browser !== 'undefined' && (window as any).browser?.runtime?.onMessage) {
+      (window as any).browser.runtime.onMessage.addListener(messageHandler);
+    }
   }
 }
 
-// Instantiate content script
+// Auto-instantiate
 if (typeof window !== 'undefined') {
   new PolyglotContentScript();
 }

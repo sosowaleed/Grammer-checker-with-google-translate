@@ -73,17 +73,19 @@ export class OverlayManager {
     const badge = document.createElement('div');
     badge.className = `polyglot-status-badge ${errorCount > 0 ? 'has-errors' : ''}`;
 
-    badge.style.left = `${rect.right + scrollX - 85}px`;
+    const langUpper = (detectedLang || 'en').toUpperCase();
+
+    badge.style.left = `${rect.right + scrollX - 95}px`;
     badge.style.top = `${rect.bottom + scrollY - 30}px`;
 
     badge.innerHTML = `
       <div class="badge-dot"></div>
-      <span>${errorCount > 0 ? `${errorCount} issue${errorCount > 1 ? 's' : ''}` : 'Polyglot'}</span>
+      <span>${langUpper} • ${errorCount > 0 ? `${errorCount} issue${errorCount > 1 ? 's' : ''}` : 'Polyglot'}</span>
     `;
 
-    badge.title = `PolyglotGrammar: ${
+    badge.title = `PolyglotGrammar [${langUpper}]: ${
       errorCount > 0 ? `${errorCount} grammar/spelling issues detected` : 'No errors detected'
-    } (${detectedLang.toUpperCase()})`;
+    }`;
 
     badge.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -203,13 +205,19 @@ export class OverlayManager {
     marker.style.left = `${x}px`;
     marker.style.top = `${y}px`;
     marker.style.width = `${Math.max(w, 8)}px`;
-    marker.style.height = `${Math.max(h, 4)}px`;
+    marker.style.height = `${Math.max(h, 6)}px`;
+    marker.title = `Suggestion: "${correction.corrected}" (Click to replace)`;
+
+    // Prevent input blur when clicking marker
+    marker.addEventListener('mousedown', (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+    });
 
     marker.addEventListener('click', (e) => {
       e.stopPropagation();
       e.preventDefault();
       CorrectionPopup.show(correction, marker, this.activeElement, () => {
-        // When correction is accepted, re-evaluate or remove this marker
         marker.remove();
         const index = this.markers.indexOf(marker);
         if (index !== -1) this.markers.splice(index, 1);

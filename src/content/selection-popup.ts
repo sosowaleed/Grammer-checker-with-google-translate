@@ -1,8 +1,8 @@
-import browser from 'webextension-polyfill';
 import { ShadowRootHost } from './shadow-root';
 import { TextReplacer } from './text-replacer';
 import { SUPPORTED_LANGUAGES, POPULAR_LANGUAGES, getLanguageName } from '../shared/languages';
 import { SynonymGroup, SynonymsResponse, TranslateResponse } from '../shared/types';
+import { sendRuntimeMessage } from '../shared/messaging';
 
 export class SelectionPopup {
   private static activePopup: HTMLElement | null = null;
@@ -268,7 +268,7 @@ export class SelectionPopup {
     const langTag = popup.querySelector('#polyglot-card-lang') as HTMLElement;
 
     try {
-      const response: SynonymsResponse = await browser.runtime.sendMessage({
+      const response = await sendRuntimeMessage<SynonymsResponse>({
         type: 'GET_SYNONYMS',
         word
       });
@@ -351,7 +351,7 @@ export class SelectionPopup {
     `;
 
     try {
-      const response: TranslateResponse = await browser.runtime.sendMessage({
+      const response = await sendRuntimeMessage<TranslateResponse>({
         type: 'TRANSLATE_TEXT',
         text,
         targetLang

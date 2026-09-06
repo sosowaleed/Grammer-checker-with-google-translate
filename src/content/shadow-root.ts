@@ -179,17 +179,49 @@ export class ShadowRootHost {
       .polyglot-popover {
         position: absolute;
         pointer-events: auto;
-        background: rgba(15, 23, 42, 0.96);
+        background: rgba(15, 23, 42, 0.98);
         backdrop-filter: blur(16px);
         -webkit-backdrop-filter: blur(16px);
-        border: 1px solid rgba(255, 255, 255, 0.12);
+        border: 1px solid rgba(255, 255, 255, 0.16);
         border-radius: 12px;
-        box-shadow: 0 20px 35px -5px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.05);
-        padding: 12px;
-        min-width: 250px;
-        max-width: 380px;
-        animation: polyglotPopIn 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+        box-shadow: 0 16px 32px -4px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.08);
+        padding: 10px 12px;
+        min-width: 220px;
+        max-width: 340px;
+        animation: polyglotPopIn 0.16s cubic-bezier(0.16, 1, 0.3, 1);
         z-index: 2147483646;
+      }
+
+      /* Downward pointing arrow for suggestions shown on top of word */
+      .polyglot-popover.on-top::after {
+        content: '';
+        position: absolute;
+        bottom: -7px;
+        left: var(--arrow-left, 50%);
+        transform: translateX(-50%);
+        width: 0;
+        height: 0;
+        border-left: 7px solid transparent;
+        border-right: 7px solid transparent;
+        border-top: 7px solid rgba(15, 23, 42, 0.98);
+        filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.4));
+        pointer-events: none;
+      }
+
+      /* Upward pointing arrow if displayed below word */
+      .polyglot-popover.below::before {
+        content: '';
+        position: absolute;
+        top: -7px;
+        left: var(--arrow-left, 50%);
+        transform: translateX(-50%);
+        width: 0;
+        height: 0;
+        border-left: 7px solid transparent;
+        border-right: 7px solid transparent;
+        border-bottom: 7px solid rgba(15, 23, 42, 0.98);
+        filter: drop-shadow(0 -1px 2px rgba(0, 0, 0, 0.4));
+        pointer-events: none;
       }
 
       /* Header & Badges */

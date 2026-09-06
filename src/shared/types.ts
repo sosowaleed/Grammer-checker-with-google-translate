@@ -36,7 +36,7 @@ export interface UserSettings {
 
 export const DEFAULT_SETTINGS: UserSettings = {
   enabled: true,
-  preferredLanguage: 'es',
+  preferredLanguage: 'en',
   autoCheckGrammar: true,
   ignoredDomains: [],
   theme: 'dark',
