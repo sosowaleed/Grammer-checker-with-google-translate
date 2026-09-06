@@ -25,6 +25,7 @@ export interface UserSettings {
   preferredLanguage: string;
   autoCheckGrammar: boolean;
   ignoredDomains: string[];
+  ignoredWords: string[];
   theme: 'dark' | 'light' | 'auto';
   debounceMs: number;
   stats: {
@@ -39,6 +40,7 @@ export const DEFAULT_SETTINGS: UserSettings = {
   preferredLanguage: 'en',
   autoCheckGrammar: true,
   ignoredDomains: [],
+  ignoredWords: [],
   theme: 'dark',
   debounceMs: 450,
   stats: {
@@ -55,6 +57,8 @@ export type ExtensionMessage =
   | { type: 'TRANSLATE_TEXT'; text: string; targetLang: string; sourceLang?: string }
   | { type: 'GET_SETTINGS' }
   | { type: 'UPDATE_SETTINGS'; settings: Partial<UserSettings> }
+  | { type: 'IGNORE_WORD'; word: string }
+  | { type: 'UNIGNORE_WORD'; word: string }
   | { type: 'RECORD_STAT'; stat: keyof UserSettings['stats']; count?: number }
   | { type: 'OPEN_TRANSLATE_POPUP'; selectedText: string };
 

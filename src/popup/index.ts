@@ -39,6 +39,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   const domainsList = document.getElementById('domainsList') as HTMLElement;
   const domainInput = document.getElementById('domainInput') as HTMLInputElement;
   const addDomainBtn = document.getElementById('addDomainBtn') as HTMLButtonElement;
+  const wordsList = document.getElementById('wordsList') as HTMLElement;
+  const wordInput = document.getElementById('wordInput') as HTMLInputElement;
+  const addWordBtn = document.getElementById('addWordBtn') as HTMLButtonElement;
   const playgroundText = document.getElementById('playgroundText') as HTMLTextAreaElement;
   const loadSample = document.getElementById('loadSample') as HTMLElement;
 
@@ -85,6 +88,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     statTranslations.textContent = (settings.stats?.translationsPerformed || 0).toLocaleString();
 
     renderDomains();
+    renderWords();
   }
 
   function renderDomains() {
@@ -109,6 +113,33 @@ document.addEventListener('DOMContentLoaded', async () => {
       });
 
       domainsList.appendChild(tag);
+    });
+  }
+
+  function renderWords() {
+    if (!wordsList) return;
+    wordsList.innerHTML = '';
+    if (!settings.ignoredWords || settings.ignoredWords.length === 0) {
+      wordsList.innerHTML = '<span style="color: #64748b; font-size: 11px;">No words ignored</span>';
+      return;
+    }
+
+    settings.ignoredWords.forEach((word) => {
+      const tag = document.createElement('div');
+      tag.className = 'domain-tag';
+      tag.innerHTML = `
+        <span>${word}</span>
+        <span class="del-btn" data-word="${word}">&times;</span>
+      `;
+
+      tag.querySelector('.del-btn')?.addEventListener('click', async () => {
+        settings.ignoredWords = settings.ignoredWords.filter((w) => w.toLowerCase() !== word.toLowerCase());
+        await sendPopupMessage({ type: 'UNIGNORE_WORD', word });
+        await saveSettings();
+        renderWords();
+      });
+
+      wordsList.appendChild(tag);
     });
   }
 
@@ -155,6 +186,23 @@ document.addEventListener('DOMContentLoaded', async () => {
   domainInput.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') {
       addDomainBtn.click();
+    }
+  });
+
+  addWordBtn?.addEventListener('click', async () => {
+    const val = wordInput.value.trim().toLowerCase();
+    if (val && !settings.ignoredWords.map((w) => w.toLowerCase()).includes(val)) {
+      settings.ignoredWords.push(val);
+      wordInput.value = '';
+      await sendPopupMessage({ type: 'IGNORE_WORD', word: val });
+      await saveSettings();
+      renderWords();
+    }
+  });
+
+  wordInput?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      addWordBtn.click();
     }
   });
 

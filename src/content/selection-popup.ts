@@ -173,6 +173,8 @@ export class SelectionPopup {
     `;
 
     popup.addEventListener('click', (e) => e.stopPropagation());
+    popup.addEventListener('mousedown', (e) => e.stopPropagation());
+    popup.addEventListener('mouseup', (e) => e.stopPropagation());
 
     host.popoverContainer.appendChild(popup);
     this.activePopup = popup;
@@ -189,6 +191,7 @@ export class SelectionPopup {
         tabTrans.classList.remove('active');
         contentSyn.style.display = 'block';
         contentTrans.style.display = 'none';
+        this.loadSynonyms(text, popup);
       });
 
       tabTrans.addEventListener('click', () => {
@@ -266,6 +269,15 @@ export class SelectionPopup {
   private static async loadSynonyms(word: string, popup: HTMLElement): Promise<void> {
     const synonymsContainer = popup.querySelector('#synonyms-content') as HTMLElement;
     const langTag = popup.querySelector('#polyglot-card-lang') as HTMLElement;
+    if (!synonymsContainer) return;
+
+    // Show spinner if not already showing
+    synonymsContainer.innerHTML = `
+      <div style="display: flex; align-items: center; justify-content: center; padding: 20px; gap: 8px; color: #94a3b8;">
+        <div class="polyglot-spinner"></div>
+        <span>Fetching synonyms...</span>
+      </div>
+    `;
 
     try {
       const response = await sendRuntimeMessage<SynonymsResponse>({
@@ -273,16 +285,21 @@ export class SelectionPopup {
         word
       });
 
-      if (langTag && response.detectedLanguage) {
+      if (langTag && response && response.detectedLanguage) {
         langTag.textContent = getLanguageName(response.detectedLanguage);
       }
 
-      if (!response.synonyms || response.synonyms.length === 0) {
+      if (!response || !response.synonyms || response.synonyms.length === 0) {
         synonymsContainer.innerHTML = `
-          <div style="text-align: center; padding: 20px; color: #94a3b8; font-size: 12px;">
-            No direct synonyms found. Try the <b style="color: #6366f1;">Translate</b> tab!
+          <div style="text-align: center; padding: 20px 14px; color: #94a3b8; font-size: 12.5px; line-height: 1.6;">
+            <div style="font-weight: 600; color: #f1f5f9; margin-bottom: 4px;">No synonyms found for "${word}"</div>
+            <div style="font-size: 11px; color: #64748b;">Try switching to the <b style="color: #818cf8; cursor: pointer;" id="polyglot-switch-trans">Translate</b> tab!</div>
           </div>
         `;
+        synonymsContainer.querySelector('#polyglot-switch-trans')?.addEventListener('click', () => {
+          const tabTrans = popup.querySelector('#tab-translate') as HTMLElement;
+          if (tabTrans) tabTrans.click();
+        });
         return;
       }
 
@@ -325,8 +342,8 @@ export class SelectionPopup {
       });
     } catch {
       synonymsContainer.innerHTML = `
-        <div style="text-align: center; padding: 15px; color: #fda4af;">
-          Failed to load synonyms.
+        <div style="text-align: center; padding: 18px; color: #94a3b8; font-size: 12px;">
+          No synonyms found for "${word}".
         </div>
       `;
     }

@@ -1,6 +1,7 @@
 import { GrammarCorrection } from '../shared/types';
 import { ShadowRootHost } from './shadow-root';
 import { TextReplacer } from './text-replacer';
+import { sendRuntimeMessage } from '../shared/messaging';
 
 export class CorrectionPopup {
   private static currentPopup: HTMLElement | null = null;
@@ -11,7 +12,8 @@ export class CorrectionPopup {
     correction: GrammarCorrection,
     anchorEl: HTMLElement,
     targetInput: HTMLElement | null,
-    onAccept: () => void
+    onAccept: () => void,
+    onIgnore?: () => void
   ): void {
     this.close();
 
@@ -129,9 +131,19 @@ export class CorrectionPopup {
 
     // Ignore action
     const ignoreBtn = popup.querySelector('#polyglot-btn-ignore') as HTMLButtonElement;
-    ignoreBtn.addEventListener('click', (e) => {
+    ignoreBtn.addEventListener('click', async (e) => {
       e.stopPropagation();
+      try {
+        await sendRuntimeMessage({
+          type: 'IGNORE_WORD',
+          word: correction.original
+        });
+      } catch {}
+      host.showToast(`Ignored "${correction.original}"`);
       this.close();
+      if (onIgnore) {
+        onIgnore();
+      }
     });
 
     popup.addEventListener('click', (e) => {

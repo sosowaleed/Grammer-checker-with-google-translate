@@ -61,6 +61,32 @@ export class OverlayManager {
     this.currentCorrections = [];
   }
 
+  public removeMarkersForWord(word: string): void {
+    const target = word.trim().toLowerCase();
+    const remaining: HTMLElement[] = [];
+    for (const marker of this.markers) {
+      const orig = (marker as any).__polyglotCorrection?.original?.trim()?.toLowerCase();
+      if (orig === target) {
+        marker.remove();
+      } else {
+        remaining.push(marker);
+      }
+    }
+    this.markers = remaining;
+    this.currentCorrections = this.currentCorrections.filter(
+      (c) => c.original.trim().toLowerCase() !== target
+    );
+    if (this.statusBadge) {
+      if (this.markers.length === 0) {
+        this.statusBadge.classList.remove('has-errors');
+        this.statusBadge.querySelector('span')!.textContent = 'Polyglot';
+      } else {
+        const lang = (this.statusBadge.getAttribute('data-lang') || 'EN').toUpperCase();
+        this.statusBadge.querySelector('span')!.textContent = `${lang} • ${this.markers.length} issue${this.markers.length > 1 ? 's' : ''}`;
+      }
+    }
+  }
+
   private renderStatusBadge(
     element: HTMLElement,
     errorCount: number,
@@ -72,6 +98,7 @@ export class OverlayManager {
 
     const badge = document.createElement('div');
     badge.className = `polyglot-status-badge ${errorCount > 0 ? 'has-errors' : ''}`;
+    badge.setAttribute('data-lang', detectedLang || 'en');
 
     const langUpper = (detectedLang || 'en').toUpperCase();
 
@@ -207,6 +234,7 @@ export class OverlayManager {
     marker.style.width = `${Math.max(w, 8)}px`;
     marker.style.height = `${Math.max(h, 6)}px`;
     marker.title = `Suggestion: "${correction.corrected}" (Click to replace)`;
+    (marker as any).__polyglotCorrection = correction;
 
     // Prevent input blur when clicking marker
     marker.addEventListener('mousedown', (e) => {
@@ -217,15 +245,23 @@ export class OverlayManager {
     marker.addEventListener('click', (e) => {
       e.stopPropagation();
       e.preventDefault();
-      CorrectionPopup.show(correction, marker, this.activeElement, () => {
-        marker.remove();
-        const index = this.markers.indexOf(marker);
-        if (index !== -1) this.markers.splice(index, 1);
-        if (this.markers.length === 0 && this.statusBadge) {
-          this.statusBadge.classList.remove('has-errors');
-          this.statusBadge.querySelector('span')!.textContent = 'Polyglot';
+      CorrectionPopup.show(
+        correction,
+        marker,
+        this.activeElement,
+        () => {
+          marker.remove();
+          const index = this.markers.indexOf(marker);
+          if (index !== -1) this.markers.splice(index, 1);
+          if (this.markers.length === 0 && this.statusBadge) {
+            this.statusBadge.classList.remove('has-errors');
+            this.statusBadge.querySelector('span')!.textContent = 'Polyglot';
+          }
+        },
+        () => {
+          this.removeMarkersForWord(correction.original);
         }
-      });
+      );
     });
 
     return marker;

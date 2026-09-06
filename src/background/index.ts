@@ -15,8 +15,15 @@ const textCheckCache = new LRUCache<CheckTextResponse>(250, 'polyglot_text_check
 const synonymsCache = new LRUCache<SynonymsResponse>(300, 'polyglot_synonyms');
 const translationCache = new LRUCache<TranslateResponse>(300, 'polyglot_translations');
 
+// In-memory cache for settings to prevent storage quota exhaustion
+let cachedSettings: UserSettings | null = null;
+let pendingStatSaveTimer: ReturnType<typeof setTimeout> | null = null;
+
 // Helpers for Settings
 async function getStoredSettings(): Promise<UserSettings> {
+  if (cachedSettings) {
+    return cachedSettings;
+  }
   try {
     const storageApi =
       typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local
@@ -26,13 +33,21 @@ async function getStoredSettings(): Promise<UserSettings> {
     if (storageApi) {
       const data = await storageApi.get('polyglot_settings');
       if (data && data.polyglot_settings) {
-        return { ...DEFAULT_SETTINGS, ...data.polyglot_settings };
+        cachedSettings = {
+          ...DEFAULT_SETTINGS,
+          ...data.polyglot_settings,
+          ignoredWords: Array.isArray(data.polyglot_settings.ignoredWords)
+            ? data.polyglot_settings.ignoredWords
+            : []
+        };
+        return cachedSettings;
       }
     }
   } catch {
     // fallback to defaults
   }
-  return { ...DEFAULT_SETTINGS };
+  cachedSettings = { ...DEFAULT_SETTINGS };
+  return cachedSettings;
 }
 
 async function updateStoredSettings(newSettings: Partial<UserSettings>): Promise<UserSettings> {
@@ -40,11 +55,15 @@ async function updateStoredSettings(newSettings: Partial<UserSettings>): Promise
   const updated: UserSettings = {
     ...current,
     ...newSettings,
+    ignoredWords: Array.isArray(newSettings.ignoredWords)
+      ? newSettings.ignoredWords
+      : current.ignoredWords || [],
     stats: {
       ...current.stats,
       ...(newSettings.stats || {})
     }
   };
+  cachedSettings = updated;
   try {
     const storageApi =
       typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local
@@ -59,17 +78,29 @@ async function updateStoredSettings(newSettings: Partial<UserSettings>): Promise
   return updated;
 }
 
+// Debounce stats persistence to prevent hitting browser storage write limits while typing
 async function recordStat(stat: keyof UserSettings['stats'], count: number = 1): Promise<void> {
-  try {
-    const current = await getStoredSettings();
-    const updatedStats = {
-      ...current.stats,
-      [stat]: (current.stats[stat] || 0) + count
-    };
-    await updateStoredSettings({ stats: updatedStats });
-  } catch {
-    // ignore
+  const current = await getStoredSettings();
+  current.stats = {
+    ...current.stats,
+    [stat]: (current.stats[stat] || 0) + count
+  };
+  cachedSettings = current;
+
+  if (pendingStatSaveTimer) {
+    clearTimeout(pendingStatSaveTimer);
   }
+  pendingStatSaveTimer = setTimeout(async () => {
+    try {
+      const storageApi =
+        typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local
+          ? chrome.storage.local
+          : browser.storage?.local;
+      if (storageApi && cachedSettings) {
+        await storageApi.set({ polyglot_settings: cachedSettings });
+      }
+    } catch {}
+  }, 4000);
 }
 
 // Setup Context Menus
@@ -141,7 +172,8 @@ async function handleMessage(message: ExtensionMessage, sender: any): Promise<an
       // If language was explicitly passed, respect it, otherwise default to smart cross-language pair.
       const currentTarget = message.language || settings.preferredLanguage || 'en';
       const fallbackTarget = currentTarget === 'en' ? 'es' : 'en';
-      const cacheKey = `${text.trim()}:${currentTarget}:${fallbackTarget}`;
+      const ignoredSet = new Set((settings.ignoredWords || []).map((w) => w.trim().toLowerCase()));
+      const cacheKey = `${text.trim()}:${currentTarget}:${fallbackTarget}:${settings.ignoredWords?.join(',')}`;
 
       // Check LRU Cache first
       const cached = textCheckCache.get(cacheKey);
@@ -150,9 +182,26 @@ async function handleMessage(message: ExtensionMessage, sender: any): Promise<an
       }
 
       try {
-        const result = await GoogleTranslateService.checkText(text, fallbackTarget);
+        let result = await GoogleTranslateService.checkText(text, fallbackTarget);
+
+        // Fallback retry with opposite language if 0 corrections found
+        if (result.corrections.length === 0) {
+          const altTarget = fallbackTarget === 'en' ? 'es' : 'en';
+          try {
+            const altResult = await GoogleTranslateService.checkText(text, altTarget);
+            if (altResult.corrections.length > 0) {
+              result = altResult;
+            }
+          } catch {}
+        }
+
+        // Filter out ignored words
+        const filteredCorrections = result.corrections.filter(
+          (c) => !ignoredSet.has(c.original.trim().toLowerCase())
+        );
+
         const response: CheckTextResponse = {
-          corrections: result.corrections,
+          corrections: filteredCorrections,
           detectedLanguage: result.detectedLanguage
         };
         textCheckCache.set(cacheKey, response);
@@ -191,8 +240,8 @@ async function handleMessage(message: ExtensionMessage, sender: any): Promise<an
         const result = await GoogleTranslateService.getSynonyms(word, targetLang);
         const response: SynonymsResponse = {
           word: result.word,
-          synonyms: result.synonyms,
-          detectedLanguage: result.detectedLanguage
+          synonyms: result.synonyms || [],
+          detectedLanguage: result.detectedLanguage || 'en'
         };
         synonymsCache.set(cacheKey, response);
         return response;
@@ -252,7 +301,32 @@ async function handleMessage(message: ExtensionMessage, sender: any): Promise<an
     }
 
     case 'UPDATE_SETTINGS': {
+      textCheckCache.clear();
       return await updateStoredSettings(message.settings);
+    }
+
+    case 'IGNORE_WORD': {
+      const word = (message.word || '').trim().toLowerCase();
+      if (!word) return { success: false };
+      const current = await getStoredSettings();
+      const list = current.ignoredWords || [];
+      if (!list.map((w) => w.toLowerCase()).includes(word)) {
+        const updated = await updateStoredSettings({
+          ignoredWords: [...list, word]
+        });
+        textCheckCache.clear();
+        return { success: true, ignoredWords: updated.ignoredWords };
+      }
+      return { success: true, ignoredWords: list };
+    }
+
+    case 'UNIGNORE_WORD': {
+      const word = (message.word || '').trim().toLowerCase();
+      const current = await getStoredSettings();
+      const list = (current.ignoredWords || []).filter((w) => w.toLowerCase() !== word);
+      const updated = await updateStoredSettings({ ignoredWords: list });
+      textCheckCache.clear();
+      return { success: true, ignoredWords: updated.ignoredWords };
     }
 
     case 'RECORD_STAT': {

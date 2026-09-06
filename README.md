@@ -104,8 +104,8 @@ The output will be generated in `dist/chrome` and `dist/firefox`.
 npm run pack
 ```
 This generates:
-- `dist/polyglot-grammar-chrome-v1.1.0.zip` (ready for Chrome Web Store)
-- `dist/polyglot-grammar-firefox-v1.1.0.zip` (ready for Firefox Add-ons AMO)
+- `dist/polyglot-grammar-chrome-v1.2.0.zip` (ready for Chrome Web Store)
+- `dist/polyglot-grammar-firefox-v1.2.0.zip` (ready for Firefox Add-ons AMO)
 
 ---
 
@@ -136,7 +136,7 @@ This generates:
 
 #### Method 2: Permanent XPI Installation
 1. Run `npm run pack`.
-2. Rename `dist/polyglot-grammar-firefox-v1.1.0.zip` to `.xpi`.
+2. Rename `dist/polyglot-grammar-firefox-v1.2.0.zip` to `.xpi`.
 3. In Firefox Developer Edition / Nightly with `xpinstall.signatures.required = false` in `about:config`, drag and drop the `.xpi` file directly into Firefox to install permanently.
 
 ---

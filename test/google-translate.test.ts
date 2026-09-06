@@ -66,4 +66,24 @@ describe('parseHtmlCorrections', () => {
     expect(corrections[0].original).toBe('gehts');
     expect(corrections[0].corrected).toBe("geht's");
   });
+
+  it('filters out ignored words from corrections', () => {
+    const original = 'This is Forvel and a exampel';
+    const html = 'This is <b><i>forvel</i></b> and <b><i>an</i></b> <b><i>example</i></b>';
+    const corrections = parseHtmlCorrections(original, html);
+
+    expect(corrections.length).toBe(3);
+
+    const ignoredWords = ['forvel'];
+    const ignoredSet = new Set(ignoredWords.map((w) => w.toLowerCase()));
+
+    const filtered = corrections.filter(
+      (c) => !ignoredSet.has(c.original.trim().toLowerCase())
+    );
+
+    expect(filtered.length).toBe(2);
+    expect(filtered.some((c) => c.original.toLowerCase() === 'forvel')).toBe(false);
+    expect(filtered.some((c) => c.original === 'a')).toBe(true);
+    expect(filtered.some((c) => c.original === 'exampel')).toBe(true);
+  });
 });

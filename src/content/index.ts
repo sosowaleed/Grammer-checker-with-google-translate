@@ -12,6 +12,7 @@ class PolyglotContentScript {
   private currentSettings: UserSettings = { ...DEFAULT_SETTINGS };
   private activeElement: HTMLElement | null = null;
   private currentDetectedLanguage: string = 'en';
+  private checkRequestId: number = 0;
 
   constructor() {
     // 1. Instantiate Shadow Root host immediately
@@ -72,7 +73,7 @@ class PolyglotContentScript {
       }
     }, { capture: true, passive: true });
 
-    // Clear overlay on blur (unless clicking into suggestion popup)
+    // Clear overlay on blur (unless clicking into suggestion popup or within active element)
     document.addEventListener(
       'focusout',
       (e) => {
@@ -81,7 +82,12 @@ class PolyglotContentScript {
           return;
         }
         setTimeout(() => {
-          if (document.activeElement !== this.activeElement) {
+          if (!this.activeElement || !document.contains(this.activeElement)) {
+            this.overlayManager.clear();
+          } else if (
+            document.activeElement !== this.activeElement &&
+            !this.activeElement.contains(document.activeElement)
+          ) {
             this.overlayManager.clear();
           }
         }, 220);
@@ -115,6 +121,8 @@ class PolyglotContentScript {
       return;
     }
 
+    const requestId = ++this.checkRequestId;
+
     try {
       const response = await sendRuntimeMessage<CheckTextResponse>({
         type: 'CHECK_TEXT',
@@ -122,25 +130,52 @@ class PolyglotContentScript {
         language: this.currentDetectedLanguage || this.currentSettings.preferredLanguage || 'en'
       });
 
+      // Discard stale out-of-order responses from earlier keystrokes
+      if (requestId !== this.checkRequestId) {
+        return;
+      }
+
       if (response && Array.isArray(response.corrections)) {
-        // Dynamically adapt language based on what user is typing!
-        if (response.detectedLanguage && response.detectedLanguage !== 'auto') {
+        // Dynamically adapt language based on what user is typing (if confirmed and recognized)
+        if (
+          response.detectedLanguage &&
+          response.detectedLanguage !== 'auto' &&
+          response.detectedLanguage !== 'und' &&
+          text.trim().length >= 6
+        ) {
           this.currentDetectedLanguage = response.detectedLanguage;
         }
 
+        // Filter out locally ignored words immediately
+        const ignored = new Set(
+          (this.currentSettings.ignoredWords || []).map((w) => w.toLowerCase().trim())
+        );
+        const filteredCorrections = response.corrections.filter(
+          (c) => !ignored.has(c.original.toLowerCase().trim())
+        );
+
         this.overlayManager.setCorrections(
           element,
-          response.corrections,
+          filteredCorrections,
           this.currentDetectedLanguage
         );
       }
     } catch {
-      // Silently back off
+      // Silently back off without breaking future checks
     }
   }
 
   private setupSelectionObserver(): void {
-    const handleSelectionChange = () => {
+    const handleSelectionChange = (e?: Event) => {
+      // If the interaction originated inside grammar-checker-root (e.g. clicking Synonyms tab), ignore
+      if (e && 'composedPath' in e) {
+        const path = e.composedPath();
+        const host = ShadowRootHost.getInstance();
+        if (path.includes(host.rootElement)) {
+          return;
+        }
+      }
+
       setTimeout(() => {
         const sel = window.getSelection();
         if (!sel) return;
@@ -156,12 +191,17 @@ class PolyglotContentScript {
       }, 20);
     };
 
-    document.addEventListener('mouseup', handleSelectionChange, { passive: true });
-    document.addEventListener('keyup', (e) => {
-      if (e.key === 'Shift' || e.key.startsWith('Arrow')) {
-        handleSelectionChange();
-      }
-    }, { passive: true });
+    document.addEventListener('mouseup', (e) => handleSelectionChange(e), { passive: true });
+    document.addEventListener(
+      'keyup',
+      (e) => {
+        // Safe check for e.key to prevent Uncaught TypeError on undefined
+        if (typeof e.key === 'string' && (e.key === 'Shift' || e.key.startsWith('Arrow'))) {
+          handleSelectionChange(e);
+        }
+      },
+      { passive: true }
+    );
   }
 
   private setupMessageListener(): void {
@@ -175,6 +215,8 @@ class PolyglotContentScript {
           rect = new DOMRect(window.innerWidth / 2 - 150, 100, 300, 50);
         }
         SelectionPopup.openCard(message.selectedText || '', rect, 'translate');
+      } else if (message && message.type === 'SETTINGS_UPDATED') {
+        this.fetchSettings();
       }
     };
 
