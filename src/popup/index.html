@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PolyglotGrammar Dashboard</title>
+    <style>
+      :root {
+        --bg-gradient: linear-gradient(145deg, #0b0f19 0%, #111827 50%, #0d121f 100%);
+        --surface: rgba(30, 41, 59, 0.7);
+        --surface-border: rgba(255, 255, 255, 0.08);
+        --text-primary: #f8fafc;
+        --text-secondary: #94a3b8;
+        --primary: #6366f1;
+        --primary-hover: #4f46e5;
+        --primary-glow: rgba(99, 102, 241, 0.35);
+        --success: #10b981;
+        --danger: #f43f5e;
+        --card-radius: 12px;
+      }
+
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      }
+
+      body {
+        width: 380px;
+        min-height: 520px;
+        background: var(--bg-gradient);
+        color: var(--text-primary);
+        font-size: 13px;
+        line-height: 1.5;
+        overflow-x: hidden;
+      }
+
+      .dashboard-container {
+        padding: 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+      }
+
+      /* Header */
+      .header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding-bottom: 12px;
+        border-bottom: 1px solid var(--surface-border);
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .logo-icon {
+        width: 32px;
+        height: 32px;
+        border-radius: 9px;
+        background: linear-gradient(135deg, #6366f1, #a855f7);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 4px 12px var(--primary-glow);
+      }
+
+      .logo-icon svg {
+        width: 18px;
+        height: 18px;
+        color: white;
+      }
+
+      .brand-title {
+        font-size: 15px;
+        font-weight: 700;
+        letter-spacing: -0.2px;
+        background: linear-gradient(90deg, #ffffff, #cbd5e1);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+      }
+
+      .brand-subtitle {
+        font-size: 11px;
+        color: var(--text-secondary);
+      }
+
+      .status-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 4px 9px;
+        border-radius: 20px;
+        font-size: 11px;
+        font-weight: 600;
+        background: rgba(16, 185, 129, 0.12);
+        color: var(--success);
+        border: 1px solid rgba(16, 185, 129, 0.25);
+        transition: all 0.2s ease;
+      }
+
+      .status-pill.disabled {
+        background: rgba(244, 63, 94, 0.12);
+        color: var(--danger);
+        border-color: rgba(244, 63, 94, 0.25);
+      }
+
+      .status-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: currentColor;
+      }
+
+      /* Cards */
+      .card {
+        background: var(--surface);
+        backdrop-filter: blur(12px);
+        border: 1px solid var(--surface-border);
+        border-radius: var(--card-radius);
+        padding: 12px 14px;
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+      }
+
+      .row-switch {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+
+      .row-label {
+        font-size: 13px;
+        font-weight: 600;
+        color: #f1f5f9;
+      }
+
+      .row-desc {
+        font-size: 11px;
+        color: var(--text-secondary);
+        margin-top: 2px;
+      }
+
+      /* Switch */
+      .switch {
+        position: relative;
+        display: inline-block;
+        width: 40px;
+        height: 22px;
+        flex-shrink: 0;
+      }
+
+      .switch input {
+        opacity: 0;
+        width: 0;
+        height: 0;
+      }
+
+      .slider {
+        position: absolute;
+        cursor: pointer;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-color: #334155;
+        transition: 0.25s;
+        border-radius: 22px;
+      }
+
+      .slider:before {
+        position: absolute;
+        content: '';
+        height: 16px;
+        width: 16px;
+        left: 3px;
+        bottom: 3px;
+        background-color: white;
+        transition: 0.25s;
+        border-radius: 50%;
+      }
+
+      input:checked + .slider {
+        background: linear-gradient(135deg, #6366f1, #4f46e5);
+      }
+
+      input:checked + .slider:before {
+        transform: translateX(18px);
+      }
+
+      /* Form controls */
+      .form-group {
+        margin-top: 10px;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+
+      .select-input {
+        background: rgba(15, 23, 42, 0.8);
+        border: 1px solid var(--surface-border);
+        border-radius: 8px;
+        color: #f8fafc;
+        padding: 7px 10px;
+        font-size: 12.5px;
+        outline: none;
+        cursor: pointer;
+        transition: border-color 0.15s ease;
+      }
+
+      .select-input:focus {
+        border-color: var(--primary);
+      }
+
+      /* Stats Grid */
+      .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 8px;
+      }
+
+      .stat-card {
+        background: rgba(15, 23, 42, 0.6);
+        border: 1px solid var(--surface-border);
+        border-radius: 10px;
+        padding: 10px 8px;
+        text-align: center;
+      }
+
+      .stat-val {
+        font-size: 16px;
+        font-weight: 700;
+        color: #f8fafc;
+        background: linear-gradient(90deg, #818cf8, #38bdf8);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+      }
+
+      .stat-label {
+        font-size: 10px;
+        color: var(--text-secondary);
+        text-transform: uppercase;
+        letter-spacing: 0.4px;
+        margin-top: 2px;
+      }
+
+      /* Ignored Domains */
+      .domains-wrap {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-top: 8px;
+        max-height: 70px;
+        overflow-y: auto;
+      }
+
+      .domain-tag {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        background: rgba(255, 255, 255, 0.06);
+        border: 1px solid var(--surface-border);
+        border-radius: 6px;
+        padding: 3px 7px;
+        font-size: 11px;
+        color: #cbd5e1;
+      }
+
+      .domain-tag .del-btn {
+        cursor: pointer;
+        color: #94a3b8;
+        font-weight: bold;
+        transition: color 0.15s;
+      }
+
+      .domain-tag .del-btn:hover {
+        color: var(--danger);
+      }
+
+      .add-domain-row {
+        display: flex;
+        gap: 6px;
+        margin-top: 8px;
+      }
+
+      .input-text {
+        flex: 1;
+        background: rgba(15, 23, 42, 0.8);
+        border: 1px solid var(--surface-border);
+        border-radius: 6px;
+        color: #f8fafc;
+        padding: 6px 9px;
+        font-size: 12px;
+        outline: none;
+      }
+
+      .input-text:focus {
+        border-color: var(--primary);
+      }
+
+      .btn-add {
+        background: var(--primary);
+        color: white;
+        border: none;
+        border-radius: 6px;
+        padding: 6px 12px;
+        font-size: 12px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background 0.15s;
+      }
+
+      .btn-add:hover {
+        background: var(--primary-hover);
+      }
+
+      /* Test Playground */
+      .playground-wrap {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      .playground-textarea {
+        width: 100%;
+        height: 64px;
+        background: rgba(15, 23, 42, 0.8);
+        border: 1px solid var(--surface-border);
+        border-radius: 8px;
+        color: #f8fafc;
+        padding: 8px 10px;
+        font-size: 12.5px;
+        resize: none;
+        outline: none;
+      }
+
+      .playground-textarea:focus {
+        border-color: var(--primary);
+      }
+
+      .playground-hint {
+        font-size: 11px;
+        color: #64748b;
+        display: flex;
+        justify-content: space-between;
+      }
+
+      .sample-link {
+        color: #818cf8;
+        cursor: pointer;
+        text-decoration: underline;
+      }
+
+      .sample-link:hover {
+        color: #a5b4fc;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="dashboard-container">
+      <!-- Header -->
+      <div class="header">
+        <div class="brand">
+          <div class="logo-icon">
+            <svg viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12.87 15.07l-2.54-2.51.03-.03A17.52 17.52 0 0014.07 6H17V4h-7V2H8v2H1v2h11.17C11.5 7.92 10.44 9.75 9 11.35 8.07 10.32 7.3 9.19 6.69 8h-2c.73 1.63 1.73 3.17 2.98 4.56l-5.09 5.02L4 19l5-5 3.11 3.11.76-2.04zM18.5 10h-2L12 22h2l1.12-3h4.75L21 22h2l-4.5-12zm-2.62 7l1.62-4.33L19.12 17h-3.24z"/>
+            </svg>
+          </div>
+          <div>
+            <div class="brand-title">PolyglotGrammar</div>
+            <div class="brand-subtitle">Multilingual AI Proofreader</div>
+          </div>
+        </div>
+        <div class="status-pill" id="statusPill">
+          <span class="status-dot"></span>
+          <span id="statusText">Active</span>
+        </div>
+      </div>
+
+      <!-- Master Switch -->
+      <div class="card">
+        <div class="row-switch">
+          <div>
+            <div class="row-label">Extension Status</div>
+            <div class="row-desc">Enable proofreading, synonyms & translation</div>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="masterToggle" checked />
+            <span class="slider"></span>
+          </label>
+        </div>
+      </div>
+
+      <!-- Preferred Language & Grammar Switch -->
+      <div class="card">
+        <div class="row-switch">
+          <div>
+            <div class="row-label">Auto-check as you type</div>
+            <div class="row-desc">Debounced real-time grammar detection</div>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="grammarToggle" checked />
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        <div class="form-group">
+          <label class="row-desc" for="languageSelect">Preferred Target / Fallback Language</label>
+          <select class="select-input" id="languageSelect"></select>
+        </div>
+      </div>
+
+      <!-- Stats -->
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-val" id="statWords">0</div>
+          <div class="stat-label">Words Checked</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-val" id="statCorrections">0</div>
+          <div class="stat-label">Corrected</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-val" id="statTranslations">0</div>
+          <div class="stat-label">Translations</div>
+        </div>
+      </div>
+
+      <!-- Test Playground -->
+      <div class="card">
+        <div class="playground-wrap">
+          <div class="row-label">Interactive Playground</div>
+          <textarea
+            class="playground-textarea"
+            id="playgroundText"
+            placeholder="Type here to test PolyglotGrammar live..."
+          >This is a exampel of speling eror</textarea>
+          <div class="playground-hint">
+            <span>Type or select words for synonyms</span>
+            <span class="sample-link" id="loadSample">Load Spanish sample</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Ignored Domains -->
+      <div class="card">
+        <div class="row-label">Ignored Domains</div>
+        <div class="row-desc">Disable checking on specific websites</div>
+        <div class="domains-wrap" id="domainsList"></div>
+        <div class="add-domain-row">
+          <input
+            type="text"
+            class="input-text"
+            id="domainInput"
+            placeholder="e.g. github.com"
+          />
+          <button class="btn-add" id="addDomainBtn">Add</button>
+        </div>
+      </div>
+    </div>
+
+    <script type="module" src="./index.ts"></script>
+  </body>
+</html>

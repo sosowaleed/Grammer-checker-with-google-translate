@@ -1,0 +1,47 @@
+{
+  "manifest_version": 3,
+  "name": "PolyglotGrammar - Real-time Grammar, Synonyms & Translation",
+  "short_name": "PolyglotGrammar",
+  "version": "1.0.0",
+  "description": "Real-time spelling/grammar correction as you type, contextual synonyms, and instant translation across 130+ languages powered by Google Translate.",
+  "permissions": [
+    "storage",
+    "activeTab",
+    "contextMenus"
+  ],
+  "host_permissions": [
+    "https://*.google.com/*",
+    "https://*.googleapis.com/*",
+    "<all_urls>"
+  ],
+  "background": {
+    "scripts": ["background.js"]
+  },
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "polyglot-grammar@antigravity.ai",
+      "strict_min_version": "109.0"
+    }
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "run_at": "document_end"
+    }
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "PolyglotGrammar Dashboard",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}

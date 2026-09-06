@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run unit tests
+        run: npm test
+
+      - name: Build Chrome & Firefox distributions
+        run: npm run build
+
+      - name: Verify build artifacts
+        run: |
+          test -f dist/chrome/manifest.json
+          test -f dist/chrome/background.js
+          test -f dist/chrome/content.js
+          test -f dist/chrome/popup.html
+          test -f dist/firefox/manifest.json
+          test -f dist/firefox/background.js
+          test -f dist/firefox/content.js
+          test -f dist/firefox/popup.html
+          echo "All extension build artifacts generated successfully!"

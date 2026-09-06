@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PolyglotGrammar Test Environment</title>
+    <style>
+      :root {
+        --bg: #0f172a;
+        --card-bg: #1e293b;
+        --border: rgba(255, 255, 255, 0.1);
+        --text: #f8fafc;
+        --text-muted: #94a3b8;
+        --primary: #6366f1;
+      }
+
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+        background-color: var(--bg);
+        color: var(--text);
+        padding: 40px 20px;
+        margin: 0;
+        display: flex;
+        justify-content: center;
+      }
+
+      .container {
+        max-width: 800px;
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+        gap: 24px;
+      }
+
+      header {
+        text-align: center;
+        margin-bottom: 8px;
+      }
+
+      h1 {
+        font-size: 28px;
+        font-weight: 800;
+        background: linear-gradient(135deg, #818cf8, #c084fc);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        margin-bottom: 8px;
+      }
+
+      p.subtitle {
+        color: var(--text-muted);
+        font-size: 14px;
+      }
+
+      .section-card {
+        background: var(--card-bg);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 20px;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+      }
+
+      h2 {
+        font-size: 16px;
+        font-weight: 600;
+        margin-bottom: 12px;
+        color: #e2e8f0;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+
+      .badge {
+        font-size: 11px;
+        font-weight: 600;
+        padding: 2px 8px;
+        border-radius: 12px;
+        background: rgba(99, 102, 241, 0.2);
+        color: #a5b4fc;
+        border: 1px solid rgba(99, 102, 241, 0.3);
+      }
+
+      textarea, input[type="text"], input[type="password"] {
+        width: 100%;
+        padding: 12px;
+        background: rgba(15, 23, 42, 0.8);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        color: #ffffff;
+        font-size: 14px;
+        line-height: 1.6;
+        box-sizing: border-box;
+        outline: none;
+        transition: border-color 0.2s;
+      }
+
+      textarea:focus, input[type="text"]:focus {
+        border-color: var(--primary);
+      }
+
+      textarea {
+        height: 90px;
+        resize: vertical;
+      }
+
+      .editable-box {
+        min-height: 80px;
+        padding: 14px;
+        background: rgba(15, 23, 42, 0.8);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        color: #ffffff;
+        font-size: 14px;
+        line-height: 1.6;
+        outline: none;
+      }
+
+      .editable-box:focus {
+        border-color: var(--primary);
+      }
+
+      .readonly-text {
+        font-size: 15px;
+        line-height: 1.7;
+        color: #cbd5e1;
+        background: rgba(15, 23, 42, 0.5);
+        padding: 14px;
+        border-radius: 8px;
+        border: 1px dashed var(--border);
+      }
+
+      .instruction {
+        font-size: 12px;
+        color: var(--text-muted);
+        margin-top: 8px;
+      }
+
+      .grid-2 {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <header>
+        <h1>PolyglotGrammar Test Environment</h1>
+        <p class="subtitle">Real-time Grammar, Contextual Synonyms & Multilingual Translation Harness</p>
+      </header>
+
+      <!-- Section 1: Standard Textarea -->
+      <div class="section-card">
+        <h2>
+          <span>1. Standard &lt;textarea&gt;</span>
+          <span class="badge">Debounced 450ms typing</span>
+        </h2>
+        <textarea id="test-textarea" placeholder="Type here...">This is a exampel of speling eror</textarea>
+        <p class="instruction">Notice the squiggly error markers under typos and the bottom-right status pill.</p>
+      </div>
+
+      <!-- Section 2: Multilingual Single-line Input -->
+      <div class="section-card">
+        <h2>
+          <span>2. Multilingual &lt;input type="text"&gt;</span>
+          <span class="badge">Auto-detect</span>
+        </h2>
+        <input type="text" id="test-input" value="Ich habe ein feler gemacht" />
+        <p class="instruction">Google Translate query correction detects German and marks "feler" -> "fehler".</p>
+      </div>
+
+      <!-- Section 3: Rich Text Editor -->
+      <div class="section-card">
+        <h2>
+          <span>3. Rich Text [contenteditable="true"]</span>
+          <span class="badge">Undo/Redo Preserved</span>
+        </h2>
+        <div class="editable-box" id="test-contenteditable" contenteditable="true">
+          Bonjour tout le monde! Je suis alle au cinema et je mange une pome.
+        </div>
+        <p class="instruction">Edit directly. Click any squiggly underline to apply correction while preserving Ctrl+Z.</p>
+      </div>
+
+      <!-- Section 4: Read-Only Selection (Synonyms & Translate) -->
+      <div class="section-card">
+        <h2>
+          <span>4. Read-Only Selection Explorer</span>
+          <span class="badge">Drag or Double-Click</span>
+        </h2>
+        <div class="readonly-text" id="test-readonly">
+          The brilliant scientist presented an extraordinarily innovative idea to solve global climate challenges. Every participant was delighted and expressed sincere appreciation for the breathtaking discovery.
+        </div>
+        <p class="instruction">
+          • Double-click <b>"brilliant"</b> or <b>"delighted"</b> to view Synonyms grouped by Part of Speech.<br/>
+          • Highlight the entire first sentence to instantly test Multi-Word Translation into Spanish, French, or German.
+        </p>
+      </div>
+
+      <!-- Section 5: Filtered Elements -->
+      <div class="section-card">
+        <h2>
+          <span>5. Safety Tag Exclusions</span>
+          <span class="badge">Ignored by Extension</span>
+        </h2>
+        <div class="grid-2">
+          <div>
+            <label class="instruction" for="test-password">Password field (ignored):</label>
+            <input type="password" id="test-password" value="Secret123" />
+          </div>
+          <div>
+            <label class="instruction" for="test-autocomplete-off">autocomplete="off" (ignored):</label>
+            <input type="text" id="test-autocomplete-off" autocomplete="off" value="Ignored input field" />
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Development / Browser Test Bridge -->
+    <script>
+      (function() {
+        if (!window.chrome || !window.chrome.runtime || !window.chrome.runtime.sendMessage) {
+          console.log('[Polyglot Test Bridge] Initializing standalone test bridge...');
+          
+          let mockSettings = {
+            enabled: true,
+            preferredLanguage: 'es',
+            autoCheckGrammar: true,
+            ignoredDomains: [],
+            theme: 'dark',
+            debounceMs: 450,
+            stats: { wordsChecked: 42, correctionsAccepted: 8, translationsPerformed: 12 }
+          };
+
+          function unescapeHtml(text) {
+            return text.replace(/&#39;/g, "'").replace(/&quot;/g, '"').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>');
+          }
+
+          function parseHtmlCorrections(originalText, htmlCorrected) {
+            const corrections = [];
+            if (!htmlCorrected || !htmlCorrected.includes('<b><i>')) return corrections;
+            const unescapedHtml = unescapeHtml(htmlCorrected);
+            const tagRegex = /<b><i>([\s\S]*?)<\/i><\/b>/g;
+            let lastIndex = 0;
+            let match;
+            const chunks = [];
+            while ((match = tagRegex.exec(unescapedHtml)) !== null) {
+              if (match.index > lastIndex) {
+                chunks.push({ text: unescapedHtml.substring(lastIndex, match.index), isCorrected: false });
+              }
+              chunks.push({ text: match[1], isCorrected: true });
+              lastIndex = tagRegex.lastIndex;
+            }
+            if (lastIndex < unescapedHtml.length) {
+              chunks.push({ text: unescapedHtml.substring(lastIndex), isCorrected: false });
+            }
+
+            let ptr = 0;
+            for (let i = 0; i < chunks.length; i++) {
+              const chunk = chunks[i];
+              if (!chunk.isCorrected) {
+                const found = originalText.indexOf(chunk.text, ptr);
+                if (found !== -1) ptr = found + chunk.text.length;
+              } else {
+                const nextUncorr = chunks.slice(i + 1).find(c => !c.isCorrected);
+                const endAnchor = (nextUncorr && nextUncorr.text.length > 0) ? originalText.indexOf(nextUncorr.text, ptr) : originalText.length;
+                if (endAnchor !== -1 && endAnchor >= ptr) {
+                  const originalSnippet = originalText.substring(ptr, endAnchor).trim();
+                  const replacement = chunk.text.trim();
+                  if (originalSnippet.length > 0 && originalSnippet !== replacement) {
+                    const startOffset = originalText.indexOf(originalSnippet, ptr);
+                    corrections.push({
+                      original: originalSnippet,
+                      corrected: replacement,
+                      offset: startOffset !== -1 ? startOffset : ptr,
+                      length: originalSnippet.length,
+                      explanation: originalSnippet.toLowerCase() === 'a' && replacement.toLowerCase() === 'an' 
+                        ? "Grammar: Use 'an' before words starting with vowel sounds."
+                        : "Spelling correction.",
+                      type: originalSnippet.toLowerCase() === 'a' && replacement.toLowerCase() === 'an' ? 'grammar' : 'spelling'
+                    });
+                  }
+                  ptr = endAnchor;
+                }
+              }
+            }
+            return corrections;
+          }
+
+          window.chrome = window.chrome || {};
+          window.chrome.runtime = {
+            sendMessage: async function(msg) {
+              if (msg.type === 'GET_SETTINGS') return { ...mockSettings };
+              if (msg.type === 'UPDATE_SETTINGS') {
+                mockSettings = { ...mockSettings, ...msg.settings };
+                return { ...mockSettings };
+              }
+              if (msg.type === 'RECORD_STAT') {
+                mockSettings.stats[msg.stat] = (mockSettings.stats[msg.stat] || 0) + (msg.count || 1);
+                return { success: true };
+              }
+              if (msg.type === 'CHECK_TEXT') {
+                const target = msg.language || 'es';
+                const apiUrl = 'https://clients5.google.com/translate_a/single?client=dict-chrome-ex&sl=auto&tl=' + target + '&dt=t&dt=qc&dt=bd&q=' + encodeURIComponent(msg.text);
+                const res = await fetch('/api/proxy?url=' + encodeURIComponent(apiUrl));
+                const data = await res.json();
+                const detected = (data && data[2]) || 'en';
+                let qc = data && data[7];
+                let corrections = [];
+                if (qc && qc[0]) {
+                  corrections = parseHtmlCorrections(msg.text, qc[0]);
+                }
+                return { corrections, detectedLanguage: detected };
+              }
+              if (msg.type === 'GET_SYNONYMS') {
+                const apiUrl = 'https://clients5.google.com/translate_a/single?client=dict-chrome-ex&sl=auto&tl=en&dt=t&dt=bd&dt=ss&dt=md&q=' + encodeURIComponent(msg.word);
+                const res = await fetch('/api/proxy?url=' + encodeURIComponent(apiUrl));
+                const data = await res.json();
+                const detected = (data && data[2]) || 'en';
+                const groupsMap = new Map();
+                const ssData = data && data[11];
+                if (Array.isArray(ssData)) {
+                  for (const item of ssData) {
+                    if (Array.isArray(item) && item.length >= 2) {
+                      const pos = String(item[0] || 'general').toLowerCase();
+                      if (!groupsMap.has(pos)) groupsMap.set(pos, new Set());
+                      if (Array.isArray(item[1])) {
+                        for (const grp of item[1]) {
+                          if (Array.isArray(grp) && Array.isArray(grp[0])) {
+                            for (const s of grp[0]) {
+                              if (typeof s === 'string' && s.toLowerCase() !== msg.word.toLowerCase()) {
+                                groupsMap.get(pos).add(s);
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+                const synonyms = [];
+                for (const [pos, set] of groupsMap.entries()) {
+                  const terms = Array.from(set).slice(0, 10);
+                  if (terms.length > 0) synonyms.push({ word: msg.word, pos, terms });
+                }
+                return { word: msg.word, synonyms, detectedLanguage: detected };
+              }
+              if (msg.type === 'TRANSLATE_TEXT') {
+                const target = msg.targetLang || 'es';
+                const source = msg.sourceLang || 'auto';
+                const apiUrl = 'https://clients5.google.com/translate_a/single?client=dict-chrome-ex&sl=' + source + '&tl=' + target + '&dt=t&q=' + encodeURIComponent(msg.text);
+                const res = await fetch('/api/proxy?url=' + encodeURIComponent(apiUrl));
+                const data = await res.json();
+                let translatedText = '';
+                if (data && Array.isArray(data[0])) {
+                  translatedText = data[0].map(c => c && c[0] ? c[0] : '').join('');
+                }
+                return {
+                  result: {
+                    originalText: msg.text,
+                    translatedText: translatedText.trim() || msg.text,
+                    detectedLanguage: data && data[2] ? data[2] : 'en',
+                    targetLanguage: target
+                  }
+                };
+              }
+            },
+            onMessage: {
+              addListener: function() {}
+            }
+          };
+          window.browser = window.chrome;
+        }
+      })();
+    </script>
+    <script src="/dist/chrome/content.js"></script>
+  </body>
+</html>
