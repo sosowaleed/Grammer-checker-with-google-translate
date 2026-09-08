@@ -1,13 +1,24 @@
+export interface CacheItem<T> {
+  value: T;
+  timestamp: number;
+}
+
 export class LRUCache<T> {
   private capacity: number;
-  private cache: Map<string, T>;
+  private cache: Map<string, CacheItem<T>>;
   private storageKey: string;
+  private ttlMs: number;
   private syncDebounceTimer: ReturnType<typeof setTimeout> | null = null;
 
-  constructor(capacity: number = 200, storageKey: string = 'polyglot_lru_cache') {
+  constructor(
+    capacity: number = 200,
+    storageKey: string = 'polyglot_lru_cache',
+    ttlMs: number = 2 * 60 * 60 * 1000 // 2 hours default
+  ) {
     this.capacity = capacity;
-    this.cache = new Map<string, T>();
+    this.cache = new Map<string, CacheItem<T>>();
     this.storageKey = storageKey;
+    this.ttlMs = ttlMs;
     this.initFromStorage();
   }
 
@@ -29,8 +40,16 @@ export class LRUCache<T> {
       const data = await storageApi.get(this.storageKey);
       const items = data && data[this.storageKey];
       if (Array.isArray(items)) {
-        for (const [key, value] of items) {
-          this.cache.set(key, value);
+        const now = Date.now();
+        for (const [key, item] of items) {
+          if (item && typeof item === 'object' && 'value' in item && 'timestamp' in item) {
+            if (now - item.timestamp < this.ttlMs) {
+              this.cache.set(key, item);
+            }
+          } else if (item !== undefined) {
+            // Backward compatibility for legacy flat values
+            this.cache.set(key, { value: item, timestamp: now });
+          }
         }
       }
     } catch {
@@ -39,18 +58,25 @@ export class LRUCache<T> {
   }
 
   public get(key: string): T | undefined {
-    if (!this.cache.has(key)) {
+    const item = this.cache.get(key);
+    if (!item) {
       return undefined;
     }
+
+    // Check expiration
+    if (Date.now() - item.timestamp > this.ttlMs) {
+      this.cache.delete(key);
+      return undefined;
+    }
+
     // Refresh position for LRU
-    const value = this.cache.get(key)!;
     this.cache.delete(key);
-    this.cache.set(key, value);
-    return value;
+    this.cache.set(key, item);
+    return item.value;
   }
 
   public has(key: string): boolean {
-    return this.cache.has(key);
+    return this.get(key) !== undefined;
   }
 
   public set(key: string, value: T): void {
@@ -63,7 +89,7 @@ export class LRUCache<T> {
         this.cache.delete(oldestKey);
       }
     }
-    this.cache.set(key, value);
+    this.cache.set(key, { value, timestamp: Date.now() });
     this.scheduleStorageSync();
   }
 
@@ -73,7 +99,17 @@ export class LRUCache<T> {
   }
 
   public size(): number {
+    this.cleanupExpired();
     return this.cache.size;
+  }
+
+  public cleanupExpired(): void {
+    const now = Date.now();
+    for (const [key, item] of this.cache.entries()) {
+      if (now - item.timestamp > this.ttlMs) {
+        this.cache.delete(key);
+      }
+    }
   }
 
   private scheduleStorageSync(): void {
@@ -82,7 +118,7 @@ export class LRUCache<T> {
     }
     this.syncDebounceTimer = setTimeout(() => {
       this.syncToStorage();
-    }, 1000);
+    }, 2000);
   }
 
   private async syncToStorage(): Promise<void> {
@@ -90,7 +126,9 @@ export class LRUCache<T> {
       const storageApi = this.getStorageApi();
       if (!storageApi) return;
 
-      const entries = Array.from(this.cache.entries()).slice(-100);
+      this.cleanupExpired();
+      // Bound the persisted entries to at most 50 to prevent storage quota exhaustion
+      const entries = Array.from(this.cache.entries()).slice(-50);
       await storageApi.set({ [this.storageKey]: entries });
     } catch {
       // Silently ignore storage sync errors

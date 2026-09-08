@@ -33,21 +33,23 @@ async function getStoredSettings(): Promise<UserSettings> {
     if (storageApi) {
       const data = await storageApi.get('polyglot_settings');
       if (data && data.polyglot_settings) {
-        cachedSettings = {
+        const loaded: UserSettings = {
           ...DEFAULT_SETTINGS,
           ...data.polyglot_settings,
           ignoredWords: Array.isArray(data.polyglot_settings.ignoredWords)
             ? data.polyglot_settings.ignoredWords
             : []
         };
-        return cachedSettings;
+        cachedSettings = loaded;
+        return loaded;
       }
     }
   } catch {
     // fallback to defaults
   }
-  cachedSettings = { ...DEFAULT_SETTINGS };
-  return cachedSettings;
+  const fallback: UserSettings = { ...DEFAULT_SETTINGS };
+  cachedSettings = fallback;
+  return fallback;
 }
 
 async function updateStoredSettings(newSettings: Partial<UserSettings>): Promise<UserSettings> {
@@ -71,6 +73,16 @@ async function updateStoredSettings(newSettings: Partial<UserSettings>): Promise
         : browser.storage?.local;
     if (storageApi) {
       await storageApi.set({ polyglot_settings: updated });
+    }
+    // Broadcast updated settings to all tabs
+    if (typeof chrome !== 'undefined' && chrome.tabs?.query) {
+      chrome.tabs.query({}, (tabs) => {
+        for (const tab of tabs) {
+          if (tab.id) {
+            chrome.tabs.sendMessage(tab.id, { type: 'SETTINGS_UPDATED', settings: updated }).catch(() => {});
+          }
+        }
+      });
     }
   } catch {
     // ignore storage errors
@@ -116,7 +128,7 @@ function setupContextMenus(): void {
     contextMenusApi.removeAll(() => {
       contextMenusApi.create({
         id: 'polyglot-translate-selection',
-        title: 'Translate selection with PolyglotGrammar',
+        title: 'Check spelling & translate with PolyglotGrammar',
         contexts: ['selection']
       });
     });
@@ -125,27 +137,76 @@ function setupContextMenus(): void {
   }
 }
 
+// Dynamic Service Worker Keep-Alive Port Manager
+const activeKeepAlivePorts = new Set<any>();
+
+const setupKeepAlivePortListener = (port: any) => {
+  if (port && port.name === 'polyglot-keepalive') {
+    activeKeepAlivePorts.add(port);
+    port.onDisconnect?.addListener(() => {
+      activeKeepAlivePorts.delete(port);
+    });
+    port.onMessage?.addListener((msg: any) => {
+      if (msg && msg.type === 'PING') {
+        try {
+          port.postMessage({ type: 'PONG', timestamp: Date.now() });
+        } catch {}
+      }
+    });
+  }
+};
+
+if (typeof chrome !== 'undefined' && chrome.runtime?.onConnect) {
+  chrome.runtime.onConnect.addListener(setupKeepAlivePortListener);
+} else if (typeof browser !== 'undefined' && browser.runtime?.onConnect) {
+  browser.runtime.onConnect.addListener(setupKeepAlivePortListener);
+}
+
+// Safe Context Menu Message Sender with dynamic injection fallback
+async function sendTranslateCommandToTab(tabId: number, selectedText: string): Promise<void> {
+  const payload = {
+    type: 'OPEN_TRANSLATE_POPUP',
+    selectedText
+  };
+
+  if (typeof chrome !== 'undefined' && chrome.tabs?.sendMessage) {
+    try {
+      await chrome.tabs.sendMessage(tabId, payload).catch(async () => {
+        // Content script might not be injected yet (e.g. extension reloaded). Inject dynamically.
+        if (chrome.scripting && tabId) {
+          try {
+            await chrome.scripting.executeScript({
+              target: { tabId },
+              files: ['content.js']
+            });
+            setTimeout(() => {
+              chrome.tabs.sendMessage(tabId, payload).catch(() => {});
+            }, 120);
+          } catch {}
+        }
+      });
+    } catch {}
+    return;
+  }
+
+  if (typeof browser !== 'undefined' && browser.tabs?.sendMessage) {
+    try {
+      await browser.tabs.sendMessage(tabId, payload).catch(() => {});
+    } catch {}
+  }
+}
+
 // Context Menu Listener
 if (typeof chrome !== 'undefined' && chrome.contextMenus?.onClicked) {
-  chrome.contextMenus.onClicked.addListener(async (info, tab) => {
+  chrome.contextMenus.onClicked.addListener((info, tab) => {
     if (info.menuItemId === 'polyglot-translate-selection' && info.selectionText && tab?.id) {
-      try {
-        chrome.tabs.sendMessage(tab.id, {
-          type: 'OPEN_TRANSLATE_POPUP',
-          selectedText: info.selectionText
-        });
-      } catch {}
+      sendTranslateCommandToTab(tab.id, info.selectionText);
     }
   });
 } else if (typeof browser !== 'undefined' && browser.contextMenus?.onClicked) {
-  browser.contextMenus.onClicked.addListener(async (info, tab) => {
+  browser.contextMenus.onClicked.addListener((info, tab) => {
     if (info.menuItemId === 'polyglot-translate-selection' && info.selectionText && tab?.id) {
-      try {
-        await browser.tabs.sendMessage(tab.id, {
-          type: 'OPEN_TRANSLATE_POPUP',
-          selectedText: info.selectionText
-        });
-      } catch {}
+      sendTranslateCommandToTab(tab.id, info.selectionText);
     }
   });
 }
@@ -241,6 +302,7 @@ async function handleMessage(message: ExtensionMessage, sender: any): Promise<an
         const response: SynonymsResponse = {
           word: result.word,
           synonyms: result.synonyms || [],
+          definitions: result.definitions || [],
           detectedLanguage: result.detectedLanguage || 'en'
         };
         synonymsCache.set(cacheKey, response);
@@ -249,6 +311,7 @@ async function handleMessage(message: ExtensionMessage, sender: any): Promise<an
         return {
           word,
           synonyms: [],
+          definitions: [],
           detectedLanguage: 'en',
           error: err?.message || 'Lookup failed'
         } as SynonymsResponse;
@@ -334,6 +397,10 @@ async function handleMessage(message: ExtensionMessage, sender: any): Promise<an
       return { success: true };
     }
 
+    case 'PING': {
+      return { pong: true, timestamp: Date.now(), activePorts: activeKeepAlivePorts.size };
+    }
+
     default:
       return null;
   }
@@ -344,7 +411,7 @@ const universalMessageListener = (
   message: ExtensionMessage,
   sender: any,
   sendResponse: (res?: any) => void
-) => {
+): true => {
   handleMessage(message, sender)
     .then((result) => {
       try {

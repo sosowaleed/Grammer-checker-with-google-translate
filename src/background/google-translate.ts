@@ -1,4 +1,4 @@
-import { GrammarCorrection, SynonymGroup, TranslationResult } from '../shared/types';
+import { GrammarCorrection, SynonymGroup, TranslationResult, WordDefinition } from '../shared/types';
 
 const CLIENT_ENDPOINTS = [
   'https://clients5.google.com/translate_a/single?client=dict-chrome-ex',
@@ -17,6 +17,83 @@ function unescapeHtml(text: string): string {
 
 function cleanWord(str: string): string {
   return str.trim().replace(/^['"“‘(]+|[)'"”’.,!?:;]+$/g, '');
+}
+
+function levenshtein(a: string, b: string): number {
+  const m = a.length;
+  const n = b.length;
+  const d: number[][] = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
+  for (let i = 0; i <= m; i++) d[i][0] = i;
+  for (let j = 0; j <= n; j++) d[0][j] = j;
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      const cost = a[i - 1].toLowerCase() === b[j - 1].toLowerCase() ? 0 : 1;
+      d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + cost);
+    }
+  }
+  return d[m][n];
+}
+
+/**
+ * Resiliently find an anchor in originalText starting from startFrom,
+ * handling whitespace variations (multiple spaces, tabs, newlines).
+ */
+export function findAnchor(
+  text: string,
+  anchor: string,
+  startFrom: number
+): { start: number; end: number } | null {
+  if (!anchor) return { start: startFrom, end: startFrom };
+
+  // 1. Exact match
+  const exactIndex = text.indexOf(anchor, startFrom);
+  if (exactIndex !== -1) {
+    let end = exactIndex + anchor.length;
+    if (/\s$/.test(anchor)) {
+      while (end < text.length && /\s/.test(text[end])) end++;
+    }
+    return { start: exactIndex, end };
+  }
+
+  // 2. Whitespace-tolerant match
+  const trimmedAnchor = anchor.trim();
+  if (!trimmedAnchor) {
+    const wsMatch = /^\s+/.exec(text.substring(startFrom));
+    if (wsMatch) {
+      return { start: startFrom, end: startFrom + wsMatch[0].length };
+    }
+    return { start: startFrom, end: startFrom };
+  }
+
+  const tokens = trimmedAnchor.split(/\s+/);
+  const escapedTokens = tokens.map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  const pattern = new RegExp(escapedTokens.join('\\s+'), 'i');
+  const match = pattern.exec(text.substring(startFrom));
+
+  if (match) {
+    const matchStart = startFrom + match.index;
+    let matchEnd = matchStart + match[0].length;
+    if (/\s$/.test(anchor)) {
+      while (matchEnd < text.length && /\s/.test(text[matchEnd])) matchEnd++;
+    }
+    return { start: matchStart, end: matchEnd };
+  }
+
+  // 3. Fallback: match boundary tokens
+  if (tokens.length > 1) {
+    const lastToken = escapedTokens[escapedTokens.length - 1];
+    const lastMatch = new RegExp('\\b' + lastToken + '\\b', 'i').exec(text.substring(startFrom));
+    if (lastMatch) {
+      const lastStart = startFrom + lastMatch.index;
+      let lastEnd = lastStart + lastMatch[0].length;
+      if (/\s$/.test(anchor)) {
+        while (lastEnd < text.length && /\s/.test(text[lastEnd])) lastEnd++;
+      }
+      return { start: lastStart, end: lastEnd };
+    }
+  }
+
+  return null;
 }
 
 /**
@@ -67,51 +144,142 @@ export function parseHtmlCorrections(
     });
   }
 
-  // Now align with originalText
+  // Now align with originalText by processing groups of corrections bounded by non-whitespace anchors
   let originalPointer = 0;
+  let i = 0;
 
-  for (let i = 0; i < chunks.length; i++) {
+  while (i < chunks.length) {
     const chunk = chunks[i];
 
     if (!chunk.isCorrected) {
-      // Find chunk in originalText starting from originalPointer
-      const foundIndex = originalText.indexOf(chunk.text, originalPointer);
-      if (foundIndex !== -1) {
-        originalPointer = foundIndex + chunk.text.length;
+      if (chunk.text.trim().length > 0) {
+        const anchorMatch = findAnchor(originalText, chunk.text, originalPointer);
+        if (anchorMatch) {
+          originalPointer = anchorMatch.end;
+        }
       }
+      i++;
     } else {
-      // This is a corrected segment.
-      // Next uncorrected chunk acts as the end anchor
-      const nextUncorrected = chunks.slice(i + 1).find((c) => !c.isCorrected);
-      let endAnchorIndex = -1;
-
-      if (nextUncorrected && nextUncorrected.text.length > 0) {
-        endAnchorIndex = originalText.indexOf(nextUncorrected.text, originalPointer);
-      } else {
-        endAnchorIndex = originalText.length;
+      // Gather all consecutive corrected chunks (along with any whitespace-only uncorrected chunks between them)
+      const correctionGroup: string[] = [];
+      let j = i;
+      while (j < chunks.length) {
+        if (chunks[j].isCorrected) {
+          const txt = chunks[j].text.trim();
+          if (txt.length > 0) {
+            correctionGroup.push(txt);
+          }
+          j++;
+        } else if (chunks[j].text.trim().length === 0) {
+          // Pure whitespace chunk between adjacent corrections
+          j++;
+        } else {
+          // Found the next real anchor with non-whitespace text
+          break;
+        }
       }
 
-      if (endAnchorIndex !== -1 && endAnchorIndex >= originalPointer) {
-        const originalSnippet = originalText.substring(originalPointer, endAnchorIndex);
-        const trimmedOriginal = originalSnippet.trim();
-        const trimmedReplacement = chunk.text.trim();
+      // Find where the next real anchor starts in originalText
+      let endAnchorIndex = originalText.length;
+      if (j < chunks.length && chunks[j].text.trim().length > 0) {
+        const nextAnchorMatch = findAnchor(originalText, chunks[j].text, originalPointer);
+        if (nextAnchorMatch) {
+          endAnchorIndex = nextAnchorMatch.start;
+        }
+      }
 
-        if (trimmedOriginal.length > 0 && trimmedOriginal !== trimmedReplacement) {
-          const startOffset = originalText.indexOf(trimmedOriginal, originalPointer);
-          const offset = startOffset !== -1 ? startOffset : originalPointer;
+      // Slice matching originalText span between previous and next real anchors
+      const rawSpan = originalText.substring(originalPointer, endAnchorIndex);
+      const origWords: { word: string; offset: number; length: number }[] = [];
+      const wordRegex = /\S+/g;
+      let wm: RegExpExecArray | null;
+      while ((wm = wordRegex.exec(rawSpan)) !== null) {
+        origWords.push({
+          word: wm[0],
+          offset: originalPointer + wm.index,
+          length: wm[0].length
+        });
+      }
 
+      if (correctionGroup.length === origWords.length) {
+        // 1-to-1 match between original words and corrected words
+        for (let k = 0; k < origWords.length; k++) {
+          const orig = origWords[k];
+          const rep = correctionGroup[k];
+          if (orig.word !== rep) {
+            corrections.push({
+              original: orig.word,
+              corrected: rep,
+              offset: orig.offset,
+              length: orig.length,
+              explanation: determineExplanation(orig.word, rep),
+              type: determineType(orig.word, rep)
+            });
+          }
+        }
+      } else if (correctionGroup.length === 1 && origWords.length > 1) {
+        // 1 replacement word for multiple words: pick closest word by Levenshtein distance
+        let bestWord = origWords[origWords.length - 1];
+        let minD = Infinity;
+        for (const w of origWords) {
+          const dist = levenshtein(cleanWord(w.word), correctionGroup[0]);
+          if (dist < minD) {
+            minD = dist;
+            bestWord = w;
+          }
+        }
+        if (bestWord.word !== correctionGroup[0]) {
           corrections.push({
-            original: trimmedOriginal,
-            corrected: trimmedReplacement,
-            offset: offset,
-            length: trimmedOriginal.length,
-            explanation: determineExplanation(trimmedOriginal, trimmedReplacement),
-            type: determineType(trimmedOriginal, trimmedReplacement)
+            original: bestWord.word,
+            corrected: correctionGroup[0],
+            offset: bestWord.offset,
+            length: bestWord.length,
+            explanation: determineExplanation(bestWord.word, correctionGroup[0]),
+            type: determineType(bestWord.word, correctionGroup[0])
           });
         }
-
-        originalPointer = endAnchorIndex;
+      } else if (correctionGroup.length > 1 && origWords.length === 1) {
+        // Multiple replacement words for 1 original word (e.g. alot -> a lot)
+        const combined = correctionGroup.join(' ');
+        corrections.push({
+          original: origWords[0].word,
+          corrected: combined,
+          offset: origWords[0].offset,
+          length: origWords[0].length,
+          explanation: determineExplanation(origWords[0].word, combined),
+          type: determineType(origWords[0].word, combined)
+        });
+      } else {
+        // General alignment using greedy/Levenshtein matching
+        const used = new Set<number>();
+        for (const rep of correctionGroup) {
+          let bestIdx = -1;
+          let minD = Infinity;
+          for (let k = 0; k < origWords.length; k++) {
+            if (used.has(k)) continue;
+            const dist = levenshtein(cleanWord(origWords[k].word), rep);
+            if (dist < minD) {
+              minD = dist;
+              bestIdx = k;
+            }
+          }
+          if (bestIdx !== -1 && minD <= 4) {
+            used.add(bestIdx);
+            const orig = origWords[bestIdx];
+            corrections.push({
+              original: orig.word,
+              corrected: rep,
+              offset: orig.offset,
+              length: orig.length,
+              explanation: determineExplanation(orig.word, rep),
+              type: determineType(orig.word, rep)
+            });
+          }
+        }
       }
+
+      originalPointer = endAnchorIndex;
+      i = j;
     }
   }
 
@@ -176,6 +344,98 @@ export class GoogleTranslateService {
     throw lastError || new Error('All Google Translate endpoints failed');
   }
 
+  private static dictWordCache = new Map<string, boolean>();
+  private static standaloneQcCache = new Map<string, string | null>();
+
+  /**
+   * Check whether a word exists in dictionary definitions (dt=bd)
+   */
+  public static async isDictionaryWord(word: string, lang: string = 'en'): Promise<boolean> {
+    const clean = cleanWord(word).toLowerCase();
+    if (!clean || clean.length < 2) return false;
+    const cacheKey = `${lang}:${clean}`;
+    if (this.dictWordCache.has(cacheKey)) {
+      return this.dictWordCache.get(cacheKey)!;
+    }
+
+    try {
+      const data = await this.requestWithFallback(
+        (ep) => `${ep}&sl=${lang}&tl=es&dt=t&dt=bd&q=${encodeURIComponent(clean)}`
+      );
+      const hasDict = !!(data && data[1]);
+      this.dictWordCache.set(cacheKey, hasDict);
+      return hasDict;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Get query correction for a single word in isolation
+   */
+  public static async getStandaloneCorrection(word: string): Promise<string | null> {
+    const clean = cleanWord(word);
+    if (!clean || clean.length < 2) return null;
+    const cacheKey = clean.toLowerCase();
+    if (this.standaloneQcCache.has(cacheKey)) {
+      return this.standaloneQcCache.get(cacheKey)!;
+    }
+
+    try {
+      const data = await this.requestWithFallback(
+        (ep) => `${ep}&sl=auto&tl=es&dt=t&dt=qc&dt=bd&q=${encodeURIComponent(clean)}`
+      );
+      const qc = data && data[7];
+      if (qc && Array.isArray(qc) && typeof qc[0] === 'string') {
+        const match = /<b><i>([\s\S]*?)<\/i><\/b>/.exec(qc[0]);
+        if (match) {
+          const sugg = unescapeHtml(match[1]).trim();
+          this.standaloneQcCache.set(cacheKey, sugg);
+          return sugg;
+        }
+      }
+      this.standaloneQcCache.set(cacheKey, null);
+      return null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Refine single-word suggestions if the suggested word is not a recognized dictionary word
+   * (e.g. 'giva' for 'givea' -> refined to 'give')
+   */
+  public static async refineCorrections(
+    corrections: GrammarCorrection[],
+    detectedLang: string
+  ): Promise<GrammarCorrection[]> {
+    for (const c of corrections) {
+      if (!c.original.includes(' ') && !c.corrected.includes(' ')) {
+        try {
+          const isCorrectedInDict = await this.isDictionaryWord(c.corrected, detectedLang);
+          if (!isCorrectedInDict) {
+            const standaloneSugg = await this.getStandaloneCorrection(c.original);
+            if (
+              standaloneSugg &&
+              standaloneSugg.toLowerCase() !== c.original.toLowerCase() &&
+              !standaloneSugg.includes(' ')
+            ) {
+              const isStandaloneInDict = await this.isDictionaryWord(standaloneSugg, detectedLang);
+              if (isStandaloneInDict) {
+                c.corrected = standaloneSugg;
+                c.explanation = determineExplanation(c.original, c.corrected);
+                c.type = determineType(c.original, c.corrected);
+              }
+            }
+          }
+        } catch {
+          // Keep c as is
+        }
+      }
+    }
+    return corrections;
+  }
+
   /**
    * Grammar and spell checking
    */
@@ -221,6 +481,9 @@ export class GoogleTranslateService {
         const htmlCorrected = qcData[0];
         if (typeof htmlCorrected === 'string') {
           corrections = parseHtmlCorrections(text, htmlCorrected);
+          if (corrections.length > 0) {
+            corrections = await this.refineCorrections(corrections, detectedLang);
+          }
         }
       }
 
@@ -235,15 +498,15 @@ export class GoogleTranslateService {
   }
 
   /**
-   * Synonym extraction with Part of Speech
+   * Synonym and definition extraction with Part of Speech
    */
   public static async getSynonyms(
     word: string,
     preferredLang: string = 'en'
-  ): Promise<{ word: string; synonyms: SynonymGroup[]; detectedLanguage: string }> {
+  ): Promise<{ word: string; synonyms: SynonymGroup[]; definitions: WordDefinition[]; detectedLanguage: string }> {
     const clean = cleanWord(word);
     if (!clean) {
-      return { word, synonyms: [], detectedLanguage: 'auto' };
+      return { word, synonyms: [], definitions: [], detectedLanguage: 'auto' };
     }
 
     const encoded = encodeURIComponent(clean);
@@ -318,13 +581,41 @@ export class GoogleTranslateService {
         }
       }
 
+      // 3. Check dt=md (definitions) at index 12
+      const definitions: WordDefinition[] = [];
+      const mdData = data && data[12];
+      if (Array.isArray(mdData)) {
+        for (const item of mdData) {
+          if (Array.isArray(item) && item.length >= 2) {
+            const pos = String(item[0] || 'general').toLowerCase();
+            const defEntries = item[1];
+            if (Array.isArray(defEntries)) {
+              for (const entry of defEntries) {
+                if (Array.isArray(entry) && typeof entry[0] === 'string') {
+                  const gloss = entry[0].trim();
+                  const example = typeof entry[2] === 'string' ? entry[2].trim() : undefined;
+                  if (gloss) {
+                    definitions.push({
+                      pos,
+                      gloss,
+                      example
+                    });
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+
       return {
         word: clean,
         synonyms,
+        definitions: definitions.slice(0, 6),
         detectedLanguage: detectedLang
       };
     } catch (err) {
-      return { word: clean, synonyms: [], detectedLanguage: 'auto' };
+      return { word: clean, synonyms: [], definitions: [], detectedLanguage: 'auto' };
     }
   }
 

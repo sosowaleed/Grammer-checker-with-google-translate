@@ -23,28 +23,27 @@ const firefoxZip = path.join(distDir, `polyglot-grammar-firefox-v${version}.zip`
 if (fs.existsSync(chromeZip)) fs.unlinkSync(chromeZip);
 if (fs.existsSync(firefoxZip)) fs.unlinkSync(firefoxZip);
 
-try {
+function createZip(srcDir, destZip) {
+  if (fs.existsSync(destZip)) fs.unlinkSync(destZip);
+
   if (process.platform === 'win32') {
-    // Windows PowerShell Compress-Archive
+    const psScript = path.resolve('scripts/make-zip.ps1');
     execSync(
-      `powershell -Command "Compress-Archive -Path '${chromeDir}\\*' -DestinationPath '${chromeZip}' -Force"`,
+      `powershell -NoProfile -ExecutionPolicy Bypass -File "${psScript}" -SrcDir "${srcDir}" -DestZip "${destZip}"`,
       { stdio: 'inherit' }
     );
-    console.log(`Created Chrome package: ${chromeZip}`);
-
-    execSync(
-      `powershell -Command "Compress-Archive -Path '${firefoxDir}\\*' -DestinationPath '${firefoxZip}' -Force"`,
-      { stdio: 'inherit' }
-    );
-    console.log(`Created Firefox package: ${firefoxZip}`);
   } else {
-    // Unix zip command
-    execSync(`cd "${chromeDir}" && zip -r "${chromeZip}" .`, { stdio: 'inherit' });
-    console.log(`Created Chrome package: ${chromeZip}`);
-
-    execSync(`cd "${firefoxDir}" && zip -r "${firefoxZip}" .`, { stdio: 'inherit' });
-    console.log(`Created Firefox package: ${firefoxZip}`);
+    execSync(`cd "${srcDir}" && zip -r "${destZip}" .`, { stdio: 'inherit' });
   }
+}
+
+try {
+  createZip(chromeDir, chromeZip);
+  console.log(`Created Chrome package: ${chromeZip}`);
+
+  createZip(firefoxDir, firefoxZip);
+  console.log(`Created Firefox package: ${firefoxZip}`);
+
   console.log('\nPackaging complete! Zip files ready for Chrome Web Store and Firefox Add-ons.');
 } catch (err) {
   console.error('Packaging failed:', err);

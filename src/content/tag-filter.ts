@@ -28,7 +28,20 @@ const IGNORED_INPUT_TYPES = new Set([
   'color',
   'date',
   'time',
-  'datetime-local'
+  'datetime-local',
+  'number'
+]);
+
+const SENSITIVE_AUTOCOMPLETE_VALUES = new Set([
+  'new-password',
+  'current-password',
+  'one-time-code',
+  'cc-number',
+  'cc-csc',
+  'cc-exp',
+  'cc-exp-month',
+  'cc-exp-year',
+  'cc-type'
 ]);
 
 export function isElementIgnored(el: HTMLElement | null): boolean {
@@ -52,13 +65,9 @@ export function isElementIgnored(el: HTMLElement | null): boolean {
     }
   }
 
-  // Autocomplete off check
+  // Sensitive security autocomplete check (passwords, PINs, 2FA, credit cards)
   const autocomplete = (el.getAttribute('autocomplete') || '').toLowerCase();
-  if (
-    autocomplete === 'off' ||
-    autocomplete === 'new-password' ||
-    autocomplete === 'current-password'
-  ) {
+  if (SENSITIVE_AUTOCOMPLETE_VALUES.has(autocomplete)) {
     return true;
   }
 
@@ -71,11 +80,14 @@ export function isElementIgnored(el: HTMLElement | null): boolean {
     return true;
   }
 
-  // Read-only or disabled input/textarea
+  // Read-only or disabled input/textarea or aria-disabled elements
   if (
     (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) &&
     (el.readOnly || el.disabled)
   ) {
+    return true;
+  }
+  if (el.getAttribute('aria-disabled') === 'true' || el.getAttribute('aria-readonly') === 'true') {
     return true;
   }
 
@@ -98,10 +110,21 @@ export function isEditableElement(el: HTMLElement | null): boolean {
 
   if (el instanceof HTMLInputElement) {
     const type = (el.type || 'text').toLowerCase();
-    return type === 'text' || type === 'search' || type === 'url' || type === 'email';
+    return !IGNORED_INPUT_TYPES.has(type);
   }
 
   if (el.isContentEditable) return true;
+
+  const contentEditableAttr = (el.getAttribute('contenteditable') || '').toLowerCase();
+  if (contentEditableAttr === 'true' || contentEditableAttr === '') return true;
+
+  const role = (el.getAttribute('role') || '').toLowerCase();
+  if (role === 'textbox' || role === 'searchbox') return true;
+
+  // Check if inside a contenteditable or role=textbox parent
+  if (el.closest('[contenteditable="true"], [role="textbox"]') !== null) {
+    return true;
+  }
 
   return false;
 }

@@ -27,8 +27,8 @@
       }
 
       body {
-        width: 380px;
-        min-height: 520px;
+        width: 390px;
+        min-height: 540px;
         background: var(--bg-gradient);
         color: var(--text-primary);
         font-size: 13px;
@@ -37,10 +37,46 @@
       }
 
       .dashboard-container {
-        padding: 16px;
+        padding: 14px 16px 18px;
         display: flex;
         flex-direction: column;
-        gap: 14px;
+        gap: 13px;
+      }
+
+      /* Top Creator Attribution Bar */
+      .creator-bar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        background: rgba(15, 23, 42, 0.6);
+        border: 1px solid rgba(99, 102, 241, 0.2);
+        border-radius: 20px;
+        padding: 4px 12px;
+        font-size: 11px;
+        color: var(--text-secondary);
+      }
+
+      .creator-bar a {
+        color: #818cf8;
+        text-decoration: none;
+        font-weight: 600;
+        transition: color 0.15s ease;
+      }
+
+      .creator-bar a:hover {
+        color: #a5b4fc;
+        text-decoration: underline;
+      }
+
+      .creator-github-icon {
+        display: inline-flex;
+        align-items: center;
+        color: #94a3b8;
+        transition: color 0.15s ease;
+      }
+
+      .creator-github-icon:hover {
+        color: #f8fafc;
       }
 
       /* Header */
@@ -48,7 +84,7 @@
         display: flex;
         align-items: center;
         justify-content: space-between;
-        padding-bottom: 12px;
+        padding-bottom: 10px;
         border-bottom: 1px solid var(--surface-border);
       }
 
@@ -61,18 +97,19 @@
       .logo-icon {
         width: 32px;
         height: 32px;
-        border-radius: 9px;
-        background: linear-gradient(135deg, #6366f1, #a855f7);
+        border-radius: 50%;
         display: flex;
         align-items: center;
         justify-content: center;
-        box-shadow: 0 4px 12px var(--primary-glow);
+        box-shadow: 0 3px 10px rgba(99, 102, 241, 0.35);
+        overflow: hidden;
+        flex-shrink: 0;
       }
 
-      .logo-icon svg {
-        width: 18px;
-        height: 18px;
-        color: white;
+      .logo-icon img {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
       }
 
       .brand-title {
@@ -85,7 +122,7 @@
       }
 
       .brand-subtitle {
-        font-size: 11px;
+        font-size: 10.5px;
         color: var(--text-secondary);
       }
 
@@ -196,16 +233,16 @@
         margin-top: 10px;
         display: flex;
         flex-direction: column;
-        gap: 6px;
+        gap: 5px;
       }
 
       .select-input {
-        background: rgba(15, 23, 42, 0.8);
+        background: rgba(15, 23, 42, 0.85);
         border: 1px solid var(--surface-border);
         border-radius: 8px;
         color: #f8fafc;
         padding: 7px 10px;
-        font-size: 12.5px;
+        font-size: 12px;
         outline: none;
         cursor: pointer;
         transition: border-color 0.15s ease;
@@ -226,7 +263,7 @@
         background: rgba(15, 23, 42, 0.6);
         border: 1px solid var(--surface-border);
         border-radius: 10px;
-        padding: 10px 8px;
+        padding: 9px 8px;
         text-align: center;
       }
 
@@ -240,14 +277,300 @@
       }
 
       .stat-label {
-        font-size: 10px;
+        font-size: 9.5px;
         color: var(--text-secondary);
         text-transform: uppercase;
         letter-spacing: 0.4px;
         margin-top: 2px;
       }
 
-      /* Ignored Domains */
+      /* Interactive Playground Container */
+      .playground-wrap {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      .playground-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+
+      .playground-editor-container {
+        position: relative;
+        width: 100%;
+      }
+
+      .playground-textarea {
+        width: 100%;
+        height: 76px;
+        background: rgba(15, 23, 42, 0.85);
+        border: 1px solid var(--surface-border);
+        border-radius: 8px;
+        color: #f8fafc;
+        padding: 8px 10px 28px 10px; /* Space for the floating pill */
+        font-size: 12.5px;
+        resize: none;
+        outline: none;
+        line-height: 1.45;
+        transition: border-color 0.15s ease;
+      }
+
+      .playground-textarea:focus {
+        border-color: var(--primary);
+      }
+
+      /* Floating Status Pill inside the Playground Editor */
+      .playground-floating-pill {
+        position: absolute;
+        bottom: 8px;
+        right: 8px;
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 3px 8px;
+        border-radius: 14px;
+        font-size: 10.5px;
+        font-weight: 600;
+        background: rgba(15, 23, 42, 0.95);
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+        color: #cbd5e1;
+        cursor: pointer;
+        user-select: none;
+        transition: all 0.18s ease;
+        z-index: 10;
+      }
+
+      .playground-floating-pill:hover {
+        transform: scale(1.06);
+        background: rgba(30, 41, 59, 0.98);
+        border-color: #818cf8;
+      }
+
+      .playground-floating-pill.checking {
+        color: #38bdf8;
+        border-color: rgba(56, 189, 248, 0.4);
+      }
+
+      .playground-floating-pill.checking .pill-dot {
+        background: #38bdf8;
+        animation: spin 0.8s linear infinite;
+      }
+
+      .playground-floating-pill.clean {
+        color: #6ee7b7;
+        border-color: rgba(16, 185, 129, 0.4);
+      }
+
+      .playground-floating-pill.clean .pill-dot {
+        background: #10b981;
+      }
+
+      .playground-floating-pill.has-errors {
+        background: rgba(244, 63, 94, 0.2);
+        color: #fca5a5;
+        border-color: #f43f5e;
+        box-shadow: 0 0 10px rgba(244, 63, 94, 0.35);
+      }
+
+      .playground-floating-pill.has-errors .pill-dot {
+        background: #f43f5e;
+        animation: pulse 1.6s infinite;
+      }
+
+      .pill-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: #94a3b8;
+      }
+
+      /* Playground Interactive Popover */
+      .playground-popover {
+        position: absolute;
+        bottom: 38px;
+        right: 4px;
+        width: 320px;
+        max-width: 95%;
+        background: rgba(15, 23, 42, 0.98);
+        backdrop-filter: blur(16px);
+        border: 1px solid rgba(99, 102, 241, 0.3);
+        border-radius: 10px;
+        box-shadow: 0 12px 30px rgba(0, 0, 0, 0.6);
+        padding: 10px 12px;
+        z-index: 20;
+        animation: popIn 0.15s ease-out;
+      }
+
+      .playground-popover-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding-bottom: 6px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        margin-bottom: 8px;
+      }
+
+      .polyglot-logo-wrap {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 10.5px;
+        font-weight: 700;
+        letter-spacing: 0.4px;
+        color: #818cf8;
+        text-transform: uppercase;
+      }
+
+      .polyglot-logo-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: linear-gradient(135deg, #6366f1, #a855f7);
+      }
+
+      .playground-popover-close {
+        background: transparent;
+        border: none;
+        color: #94a3b8;
+        font-size: 16px;
+        cursor: pointer;
+        line-height: 1;
+      }
+
+      .playground-popover-close:hover {
+        color: #ffffff;
+      }
+
+      .playground-sentence-box {
+        background: rgba(2, 6, 23, 0.6);
+        border: 1px solid rgba(56, 189, 248, 0.25);
+        border-radius: 6px;
+        padding: 8px;
+        margin-bottom: 8px;
+        font-size: 12px;
+        line-height: 1.4;
+      }
+
+      .polyglot-diff-highlight {
+        color: #38bdf8;
+        font-weight: 700;
+        font-style: italic;
+        text-decoration: underline;
+      }
+
+      .popover-actions {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 6px;
+        margin-top: 6px;
+      }
+
+      .btn-apply-all {
+        background: linear-gradient(135deg, #10b981, #059669);
+        color: #ffffff;
+        border: none;
+        border-radius: 5px;
+        padding: 4px 10px;
+        font-size: 11px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: transform 0.15s ease;
+      }
+
+      .btn-apply-all:hover {
+        transform: translateY(-1px);
+      }
+
+      /* Quick issue chips */
+      .playground-issues {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        min-height: 22px;
+      }
+
+      .fix-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        background: rgba(239, 68, 68, 0.12);
+        border: 1px solid rgba(239, 68, 68, 0.25);
+        border-radius: 6px;
+        padding: 3px 8px;
+        font-size: 11px;
+        color: #fca5a5;
+        cursor: pointer;
+        transition: all 0.15s ease;
+        user-select: none;
+      }
+
+      .fix-chip:hover {
+        background: rgba(239, 68, 68, 0.22);
+        border-color: #ef4444;
+        transform: translateY(-1px);
+      }
+
+      .fix-chip .fix-arrow {
+        color: #94a3b8;
+        font-size: 10px;
+      }
+
+      .fix-chip .fix-target {
+        color: #6ee7b7;
+        font-weight: 600;
+      }
+
+      .synonym-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        background: rgba(99, 102, 241, 0.15);
+        border: 1px solid rgba(99, 102, 241, 0.3);
+        border-radius: 6px;
+        padding: 3px 8px;
+        font-size: 11px;
+        color: #c7d2fe;
+        cursor: pointer;
+        transition: all 0.15s ease;
+        user-select: none;
+      }
+
+      .synonym-chip:hover {
+        background: rgba(99, 102, 241, 0.28);
+        border-color: #818cf8;
+        transform: translateY(-1px);
+      }
+
+      .synonym-chip .syn-badge {
+        font-size: 9px;
+        background: rgba(255, 255, 255, 0.15);
+        padding: 1px 4px;
+        border-radius: 4px;
+        color: #e0e7ff;
+      }
+
+      .playground-hint {
+        font-size: 10.5px;
+        color: #64748b;
+        display: flex;
+        justify-content: space-between;
+      }
+
+      .sample-link {
+        color: #818cf8;
+        cursor: pointer;
+        text-decoration: underline;
+      }
+
+      .sample-link:hover {
+        color: #a5b4fc;
+      }
+
+      /* Ignored Domains / Words */
       .domains-wrap {
         display: flex;
         flex-wrap: wrap;
@@ -288,7 +611,7 @@
 
       .input-text {
         flex: 1;
-        background: rgba(15, 23, 42, 0.8);
+        background: rgba(15, 23, 42, 0.85);
         border: 1px solid var(--surface-border);
         border-radius: 6px;
         color: #f8fafc;
@@ -317,66 +640,133 @@
         background: var(--primary-hover);
       }
 
-      /* Test Playground */
-      .playground-wrap {
+      /* Bottom Tip / Donation Card */
+      .donation-card {
+        background: linear-gradient(135deg, rgba(30, 41, 59, 0.85), rgba(15, 23, 42, 0.95));
+        border: 1px solid rgba(99, 102, 241, 0.25);
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+      }
+
+      .donation-header {
         display: flex;
-        flex-direction: column;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 10px;
+      }
+
+      .donation-icon {
+        font-size: 18px;
+      }
+
+      .donation-buttons {
+        display: flex;
         gap: 8px;
       }
 
-      .playground-textarea {
-        width: 100%;
-        height: 64px;
-        background: rgba(15, 23, 42, 0.8);
-        border: 1px solid var(--surface-border);
-        border-radius: 8px;
-        color: #f8fafc;
+      .btn-tip {
+        flex: 1;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
         padding: 8px 10px;
-        font-size: 12.5px;
-        resize: none;
-        outline: none;
+        border-radius: 8px;
+        font-size: 11.5px;
+        font-weight: 600;
+        text-decoration: none;
+        color: #ffffff;
+        transition: all 0.2s ease;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
       }
 
-      .playground-textarea:focus {
-        border-color: var(--primary);
+      .btn-stripe {
+        background: linear-gradient(135deg, #635bff, #4338ca);
+        border: 1px solid rgba(99, 91, 255, 0.4);
       }
 
-      .playground-hint {
-        font-size: 11px;
-        color: #64748b;
-        display: flex;
-        justify-content: space-between;
+      .btn-stripe:hover {
+        background: linear-gradient(135deg, #726aff, #4f46e5);
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(99, 91, 255, 0.4);
       }
 
-      .sample-link {
-        color: #818cf8;
-        cursor: pointer;
-        text-decoration: underline;
+      .btn-kofi {
+        background: linear-gradient(135deg, #ff5e5b, #e11d48);
+        border: 1px solid rgba(255, 94, 91, 0.4);
       }
 
-      .sample-link:hover {
-        color: #a5b4fc;
+      .btn-kofi:hover {
+        background: linear-gradient(135deg, #ff716e, #f43f5e);
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(255, 94, 91, 0.4);
+      }
+
+      /* Keyframes */
+      @keyframes popIn {
+        from { opacity: 0; transform: scale(0.95); }
+        to { opacity: 1; transform: scale(1); }
+      }
+
+      @keyframes pulse {
+        0%, 100% { opacity: 1; transform: scale(1); }
+        50% { opacity: 0.6; transform: scale(1.25); }
+      }
+
+      @keyframes spin {
+        to { transform: rotate(360deg); }
+      }
+
+      /* RTL adjustments */
+      [dir="rtl"] {
+        text-align: right;
+      }
+
+      [dir="rtl"] .playground-floating-pill {
+        right: auto;
+        left: 8px;
+      }
+
+      [dir="rtl"] .playground-popover {
+        right: auto;
+        left: 4px;
+      }
+
+      [dir="rtl"] .slider:before {
+        left: auto;
+        right: 3px;
+      }
+
+      [dir="rtl"] input:checked + .slider:before {
+        transform: translateX(-18px);
       }
     </style>
   </head>
   <body>
     <div class="dashboard-container">
+      <!-- Creator Attribution Bar -->
+      <div class="creator-bar">
+        <span><span data-i18n="created_by">Created by</span> <a href="https://github.com/sosowaleed" target="_blank" rel="noopener noreferrer">sosowaleed</a></span>
+        <a href="https://github.com/sosowaleed" target="_blank" rel="noopener noreferrer" class="creator-github-icon" title="sosowaleed on GitHub">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/>
+          </svg>
+        </a>
+      </div>
+
       <!-- Header -->
       <div class="header">
         <div class="brand">
           <div class="logo-icon">
-            <svg viewBox="0 0 24 24" fill="currentColor">
-              <path d="M12.87 15.07l-2.54-2.51.03-.03A17.52 17.52 0 0014.07 6H17V4h-7V2H8v2H1v2h11.17C11.5 7.92 10.44 9.75 9 11.35 8.07 10.32 7.3 9.19 6.69 8h-2c.73 1.63 1.73 3.17 2.98 4.56l-5.09 5.02L4 19l5-5 3.11 3.11.76-2.04zM18.5 10h-2L12 22h2l1.12-3h4.75L21 22h2l-4.5-12zm-2.62 7l1.62-4.33L19.12 17h-3.24z"/>
-            </svg>
+            <img src="icons/icon48.png" alt="PolyglotGrammar Logo" />
           </div>
           <div>
-            <div class="brand-title">PolyglotGrammar</div>
-            <div class="brand-subtitle">Multilingual AI Proofreader</div>
+            <div class="brand-title" data-i18n="app_name">PolyglotGrammar</div>
+            <div class="brand-subtitle" data-i18n="app_subtitle">Multilingual Grammar & Spell Checker</div>
           </div>
         </div>
         <div class="status-pill" id="statusPill">
           <span class="status-dot"></span>
-          <span id="statusText">Active</span>
+          <span id="statusText" data-i18n="status_active">Active</span>
         </div>
       </div>
 
@@ -384,8 +774,8 @@
       <div class="card">
         <div class="row-switch">
           <div>
-            <div class="row-label">Extension Status</div>
-            <div class="row-desc">Enable proofreading, synonyms & translation</div>
+            <div class="row-label" data-i18n="ext_status">Extension Status</div>
+            <div class="row-desc" data-i18n="ext_status_desc">Enable proofreading, synonyms & translation</div>
           </div>
           <label class="switch">
             <input type="checkbox" id="masterToggle" checked />
@@ -398,8 +788,8 @@
       <div class="card">
         <div class="row-switch">
           <div>
-            <div class="row-label">Auto-check as you type</div>
-            <div class="row-desc">Debounced real-time grammar detection</div>
+            <div class="row-label" data-i18n="auto_check">Auto-check as you type</div>
+            <div class="row-desc" data-i18n="auto_check_desc">Debounced real-time grammar detection</div>
           </div>
           <label class="switch">
             <input type="checkbox" id="grammarToggle" checked />
@@ -407,8 +797,37 @@
           </label>
         </div>
 
+        <div class="row-switch" style="margin-top: 12px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.06);">
+          <div>
+            <div class="row-label" data-i18n="auto_popup_highlight">Auto-popup on highlight</div>
+            <div class="row-desc" data-i18n="auto_popup_highlight_desc">Open suggestion card automatically when selecting text</div>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="autoPopupHighlightToggle" />
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        <div class="row-switch" style="margin-top: 12px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.06);">
+          <div>
+            <div class="row-label" data-i18n="auto_popup_hover">Auto-popup on hover</div>
+            <div class="row-desc" data-i18n="auto_popup_hover_desc">Show correction popup when hovering on misspelled words</div>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="autoPopupHoverToggle" checked />
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        <!-- UI Language Selector -->
+        <div class="form-group" style="margin-top: 12px; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.06);">
+          <label class="row-desc" for="uiLanguageSelect" data-i18n="ui_language">Interface Language</label>
+          <select class="select-input" id="uiLanguageSelect"></select>
+        </div>
+
+        <!-- Preferred Fallback / Translation Language -->
         <div class="form-group">
-          <label class="row-desc" for="languageSelect">Preferred Target / Fallback Language</label>
+          <label class="row-desc" for="languageSelect" data-i18n="pref_language">Preferred Target / Fallback Language</label>
           <select class="select-input" id="languageSelect"></select>
         </div>
       </div>
@@ -417,63 +836,128 @@
       <div class="stats-grid">
         <div class="stat-card">
           <div class="stat-val" id="statWords">0</div>
-          <div class="stat-label">Words Checked</div>
+          <div class="stat-label" data-i18n="stat_words">Words Checked</div>
         </div>
         <div class="stat-card">
           <div class="stat-val" id="statCorrections">0</div>
-          <div class="stat-label">Corrected</div>
+          <div class="stat-label" data-i18n="stat_corrected">Corrected</div>
         </div>
         <div class="stat-card">
           <div class="stat-val" id="statTranslations">0</div>
-          <div class="stat-label">Translations</div>
+          <div class="stat-label" data-i18n="stat_translations">Translations</div>
         </div>
       </div>
 
-      <!-- Test Playground -->
+      <!-- Real-Time Interactive Playground with Floating Pill -->
       <div class="card">
         <div class="playground-wrap">
-          <div class="row-label">Interactive Playground</div>
-          <textarea
-            class="playground-textarea"
-            id="playgroundText"
-            placeholder="Type here to test PolyglotGrammar live..."
-          >This is a exampel of speling eror</textarea>
+          <div class="playground-header">
+            <div class="row-label" data-i18n="playground_title">Interactive Playground</div>
+            <span class="sample-link" id="loadSample" data-i18n="load_sample_es">Load Spanish sample</span>
+          </div>
+          
+          <div class="playground-editor-container">
+            <textarea
+              class="playground-textarea"
+              id="playgroundText"
+              data-i18n-placeholder="playground_placeholder"
+              placeholder="Type here to test PolyglotGrammar live..."
+            >This is a exampel of speling eror and bad grammer.</textarea>
+
+            <!-- Floating Status Pill Badge inside the playground textarea -->
+            <div class="playground-floating-pill" id="playgroundPill" title="PolyglotGrammar Status">
+              <span class="pill-dot" id="playgroundPillDot"></span>
+              <span class="pill-label" id="playgroundPillText">Checking live...</span>
+            </div>
+
+            <!-- In-place popover list matching the extension card -->
+            <div class="playground-popover" id="playgroundPopover" style="display: none;">
+              <div class="playground-popover-header">
+                <div class="polyglot-logo-wrap">
+                  <div class="polyglot-logo-dot"></div>
+                  <span>Polyglot Proofreader</span>
+                </div>
+                <button class="playground-popover-close" id="playgroundPopoverClose" title="Close">&times;</button>
+              </div>
+              <div id="playgroundPopoverBody"></div>
+            </div>
+          </div>
+
+          <div class="playground-issues" id="playgroundIssues"></div>
           <div class="playground-hint">
-            <span>Type or select words for synonyms</span>
-            <span class="sample-link" id="loadSample">Load Spanish sample</span>
+            <span data-i18n="playground_hint">Click the pill icon or corrections above for real-time fixes</span>
           </div>
         </div>
       </div>
 
       <!-- Ignored Domains -->
       <div class="card">
-        <div class="row-label">Ignored Domains</div>
-        <div class="row-desc">Disable checking on specific websites</div>
+        <div class="row-label" data-i18n="ignored_domains">Ignored Domains</div>
+        <div class="row-desc" data-i18n="ignored_domains_desc">Disable checking on specific websites</div>
         <div class="domains-wrap" id="domainsList"></div>
         <div class="add-domain-row">
           <input
             type="text"
             class="input-text"
             id="domainInput"
+            data-i18n-placeholder="domain_placeholder"
             placeholder="e.g. github.com"
           />
-          <button class="btn-add" id="addDomainBtn">Add</button>
+          <button class="btn-add" id="addDomainBtn" data-i18n="btn_add">Add</button>
         </div>
       </div>
 
       <!-- Ignored Words -->
       <div class="card">
-        <div class="row-label">Ignored Words</div>
-        <div class="row-desc">Words skipped during grammar and spell checks</div>
+        <div class="row-label" data-i18n="ignored_words">Ignored Words</div>
+        <div class="row-desc" data-i18n="ignored_words_desc">Words skipped during grammar and spell checks</div>
         <div class="domains-wrap" id="wordsList"></div>
         <div class="add-domain-row">
           <input
             type="text"
             class="input-text"
             id="wordInput"
+            data-i18n-placeholder="word_placeholder"
             placeholder="e.g. Forvel"
           />
-          <button class="btn-add" id="addWordBtn">Add</button>
+          <button class="btn-add" id="addWordBtn" data-i18n="btn_add">Add</button>
+        </div>
+      </div>
+
+      <!-- Support / Donation Buttons -->
+      <div class="card donation-card">
+        <div class="donation-header">
+          <div class="donation-icon">☕</div>
+          <div>
+            <div class="row-label" data-i18n="tip_title">Support the Project</div>
+            <div class="row-desc" data-i18n="tip_desc">If you find PolyglotGrammar helpful, consider leaving a tip!</div>
+          </div>
+        </div>
+        <div class="donation-buttons">
+          <a
+            href="https://buy.stripe.com/test_8x29AM03GehH2nFbhLfYY01"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="btn-tip btn-stripe"
+            title="Tip via Stripe"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M13.976 9.15c-2.172-.806-3.356-1.426-3.356-2.409 0-.831.683-1.305 1.901-1.305 2.227 0 4.515.858 6.09 1.631l.89-5.494C18.252.975 15.697 0 12.165 0 9.667 0 7.589.654 6.104 1.872 4.56 3.147 3.757 4.992 3.757 7.218c0 4.039 2.467 5.76 6.476 7.219 2.585.92 3.445 1.574 3.445 2.583 0 .98-.84 1.545-2.354 1.545-1.875 0-4.965-.921-6.99-2.109l-.9 5.555C5.175 22.99 8.385 24 11.714 24c2.641 0 4.743-.653 6.26-1.854 1.61-1.275 2.45-3.132 2.45-5.462 0-4.223-2.585-5.968-6.448-7.534z"/>
+            </svg>
+            <span data-i18n="tip_stripe">Tip via Stripe</span>
+          </a>
+          <a
+            href="https://ko-fi.com/sosowaleed"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="btn-tip btn-kofi"
+            title="Support on Ko-fi"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M23.881 8.948c-.773-4.085-4.859-4.593-4.859-4.593H.723c-.604 0-.679.798-.679.798s-.082 7.324-.022 11.822c.164 2.424 2.586 2.672 2.586 2.672s8.267-.023 11.966-.049c2.438-.426 2.683-2.566 2.658-3.734 4.352.24 7.422-2.831 6.649-6.916zm-11.022 5.827c-1.045 1.054-2.738 1.054-3.783 0l-4.59-4.631c-.523-.527-.523-1.381 0-1.908.522-.527 1.368-.527 1.891 0l3.645 3.677 3.645-3.677c.523-.527 1.369-.527 1.892 0 .523.527.523 1.381 0 1.908l-2.7 2.724zm7.324-2.709c-.439 2.298-2.531 2.375-2.531 2.375V6.375s2.092-.077 2.531 2.221c.219 1.15.219 2.32 0 3.47z"/>
+            </svg>
+            <span data-i18n="tip_kofi">Support on Ko-fi</span>
+          </a>
         </div>
       </div>
     </div>

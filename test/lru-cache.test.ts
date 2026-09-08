@@ -37,4 +37,21 @@ describe('LRUCache', () => {
     expect(cache.size()).toBe(0);
     expect(cache.get('x')).toBeUndefined();
   });
+
+  it('expires entries after TTL', () => {
+    // 50ms TTL
+    const cache = new LRUCache<string>(5, 'test_ttl', 50);
+    cache.set('quick', 'val');
+    expect(cache.get('quick')).toBe('val');
+
+    // Simulate expiration
+    const originalNow = Date.now;
+    try {
+      Date.now = () => originalNow() + 100;
+      expect(cache.get('quick')).toBeUndefined();
+      expect(cache.size()).toBe(0);
+    } finally {
+      Date.now = originalNow;
+    }
+  });
 });

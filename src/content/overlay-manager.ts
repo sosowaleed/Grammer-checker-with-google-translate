@@ -11,9 +11,28 @@ export class OverlayManager {
   private mirrorDiv: HTMLDivElement | null = null;
   private scrollListener: (() => void) | null = null;
   private resizeListener: (() => void) | null = null;
+  private mouseMoveListener: ((e: MouseEvent) => void) | null = null;
+  private autoPopupHover: boolean = true;
+  private currentHoverMarker: HTMLElement | null = null;
+  private hoverTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor() {
     this.host = ShadowRootHost.getInstance();
+  }
+
+  public setAutoPopupHover(enabled: boolean): void {
+    this.autoPopupHover = enabled;
+  }
+
+  public setAutoPopup(enabled: boolean): void {
+    this.setAutoPopupHover(enabled);
+  }
+
+  private clearHoverTimer(): void {
+    if (this.hoverTimer) {
+      clearTimeout(this.hoverTimer);
+      this.hoverTimer = null;
+    }
   }
 
   public setCorrections(
@@ -41,6 +60,8 @@ export class OverlayManager {
   }
 
   public clear(): void {
+    this.clearHoverTimer();
+    this.currentHoverMarker = null;
     for (const marker of this.markers) {
       marker.remove();
     }
@@ -96,29 +117,49 @@ export class OverlayManager {
     const scrollX = window.scrollX || window.pageXOffset;
     const scrollY = window.scrollY || window.pageYOffset;
 
+    const isSingleLine = element instanceof HTMLInputElement || rect.height <= 44;
     const badge = document.createElement('div');
-    badge.className = `polyglot-status-badge ${errorCount > 0 ? 'has-errors' : ''}`;
+    badge.className = `polyglot-status-badge ${errorCount > 0 ? 'has-errors' : ''} ${isSingleLine ? 'compact-icon' : ''}`;
     badge.setAttribute('data-lang', detectedLang || 'en');
 
     const langUpper = (detectedLang || 'en').toUpperCase();
 
-    badge.style.left = `${rect.right + scrollX - 95}px`;
-    badge.style.top = `${rect.bottom + scrollY - 30}px`;
-
-    badge.innerHTML = `
-      <div class="badge-dot"></div>
-      <span>${langUpper} • ${errorCount > 0 ? `${errorCount} issue${errorCount > 1 ? 's' : ''}` : 'Polyglot'}</span>
-    `;
+    if (isSingleLine) {
+      const iconSize = 14;
+      badge.style.left = `${rect.right + scrollX - 18}px`;
+      badge.style.top = `${rect.top + scrollY + Math.max(1, (rect.height - iconSize) / 2)}px`;
+      badge.innerHTML = errorCount > 0
+        ? `<span class="compact-count">${errorCount}</span>`
+        : `<div class="badge-dot" style="margin:0;"></div>`;
+    } else {
+      badge.style.left = `${rect.right + scrollX - 82}px`;
+      badge.style.top = `${rect.bottom + scrollY - 26}px`;
+      badge.innerHTML = `
+        <div class="badge-dot"></div>
+        <span>${langUpper} • ${errorCount > 0 ? `${errorCount} issue${errorCount > 1 ? 's' : ''}` : 'Polyglot'}</span>
+      `;
+    }
 
     badge.title = `PolyglotGrammar [${langUpper}]: ${
-      errorCount > 0 ? `${errorCount} grammar/spelling issues detected` : 'No errors detected'
+      errorCount > 0 ? `${errorCount} grammar/spelling issues detected (Click to review)` : 'No errors detected'
     }`;
 
     badge.addEventListener('click', (e) => {
       e.stopPropagation();
-      if (errorCount > 0 && this.markers.length > 0) {
-        // Trigger click on first marker
-        this.markers[0].click();
+      if (errorCount > 0 && this.currentCorrections.length > 0) {
+        CorrectionPopup.showList(
+          this.currentCorrections,
+          badge,
+          this.activeElement,
+          (accepted) => {
+            this.currentCorrections = this.currentCorrections.filter((c) => c !== accepted);
+            this.setCorrections(element, this.currentCorrections, detectedLang);
+          },
+          () => {
+            this.currentCorrections = [];
+            this.clear();
+          }
+        );
       }
     });
 
@@ -135,12 +176,14 @@ export class OverlayManager {
     const scrollX = window.scrollX || window.pageXOffset;
     const scrollY = window.scrollY || window.pageYOffset;
 
-    // Create mirror element to measure exact text offsets
+    // Create mirror element to measure exact text offsets - strictly inside isolated Shadow DOM
     const mirror = document.createElement('div');
-    mirror.style.position = 'absolute';
+    mirror.style.position = 'fixed';
     mirror.style.top = '-9999px';
     mirror.style.left = '-9999px';
     mirror.style.visibility = 'hidden';
+    mirror.style.pointerEvents = 'none';
+    mirror.style.opacity = '0';
     mirror.style.whiteSpace = input instanceof HTMLTextAreaElement ? 'pre-wrap' : 'pre';
     mirror.style.wordWrap = 'break-word';
     mirror.style.boxSizing = computed.boxSizing;
@@ -153,7 +196,7 @@ export class OverlayManager {
     mirror.style.lineHeight = computed.lineHeight;
     mirror.style.padding = computed.padding;
     mirror.style.border = computed.border;
-    document.body.appendChild(mirror);
+    this.host.overlayContainer.appendChild(mirror);
     this.mirrorDiv = mirror;
 
     const value = input.value;
@@ -179,12 +222,20 @@ export class OverlayManager {
 
       // Only show if inside input visible area
       if (
-        markerTop >= rect.top + scrollY &&
-        markerTop <= rect.bottom + scrollY &&
-        markerLeft >= rect.left + scrollX &&
-        markerLeft <= rect.right + scrollX
+        markerTop >= rect.top + scrollY - 5 &&
+        markerTop <= rect.bottom + scrollY + 5 &&
+        markerLeft >= rect.left + scrollX - 5 &&
+        markerLeft <= rect.right + scrollX + 5
       ) {
-        const marker = this.createMarker(correction, markerLeft, markerTop + spanRect.height - 4, spanRect.width, 4);
+        const markerHeight = Math.max(spanRect.height, 18);
+        const marker = this.createMarker(
+          input,
+          correction,
+          markerLeft,
+          markerTop,
+          spanRect.width,
+          markerHeight
+        );
         this.markers.push(marker);
         this.host.overlayContainer.appendChild(marker);
       }
@@ -205,12 +256,14 @@ export class OverlayManager {
         for (let i = 0; i < rects.length; i++) {
           const rect = rects[i];
           if (rect.width > 0 && rect.height > 0) {
+            const markerHeight = Math.max(rect.height, 18);
             const marker = this.createMarker(
+              element,
               correction,
               rect.left + scrollX,
-              rect.bottom + scrollY - 3,
+              rect.top + scrollY,
               rect.width,
-              4
+              markerHeight
             );
             this.markers.push(marker);
             this.host.overlayContainer.appendChild(marker);
@@ -221,6 +274,7 @@ export class OverlayManager {
   }
 
   private createMarker(
+    targetElement: HTMLElement,
     correction: GrammarCorrection,
     x: number,
     y: number,
@@ -232,9 +286,10 @@ export class OverlayManager {
     marker.style.left = `${x}px`;
     marker.style.top = `${y}px`;
     marker.style.width = `${Math.max(w, 8)}px`;
-    marker.style.height = `${Math.max(h, 6)}px`;
-    marker.title = `Suggestion: "${correction.corrected}" (Click to replace)`;
+    marker.style.height = `${Math.max(h, 18)}px`;
+    marker.title = `Suggestion: "${correction.corrected}" (Hover or click to view)`;
     (marker as any).__polyglotCorrection = correction;
+    (marker as any).__polyglotTarget = targetElement;
 
     // Prevent input blur when clicking marker
     marker.addEventListener('mousedown', (e) => {
@@ -242,29 +297,96 @@ export class OverlayManager {
       e.preventDefault();
     });
 
-    marker.addEventListener('click', (e) => {
-      e.stopPropagation();
-      e.preventDefault();
+    const triggerPopup = () => {
       CorrectionPopup.show(
         correction,
         marker,
-        this.activeElement,
+        targetElement || this.activeElement,
         () => {
           marker.remove();
           const index = this.markers.indexOf(marker);
           if (index !== -1) this.markers.splice(index, 1);
-          if (this.markers.length === 0 && this.statusBadge) {
-            this.statusBadge.classList.remove('has-errors');
-            this.statusBadge.querySelector('span')!.textContent = 'Polyglot';
+          if (this.statusBadge) {
+            if (this.markers.length === 0) {
+              this.statusBadge.classList.remove('has-errors');
+              this.statusBadge.querySelector('span')!.textContent = 'Polyglot';
+            } else {
+              const lang = (this.statusBadge.getAttribute('data-lang') || 'EN').toUpperCase();
+              this.statusBadge.querySelector('span')!.textContent = `${lang} • ${this.markers.length} issue${this.markers.length > 1 ? 's' : ''}`;
+            }
           }
         },
         () => {
           this.removeMarkersForWord(correction.original);
         }
       );
+    };
+
+    marker.addEventListener('click', (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      triggerPopup();
+    });
+
+    // Hover listener if autoPopupHover is true
+    marker.addEventListener('mouseenter', () => {
+      if (this.autoPopupHover) {
+        this.clearHoverTimer();
+        this.currentHoverMarker = marker;
+        this.hoverTimer = setTimeout(() => {
+          if (this.currentHoverMarker === marker) {
+            triggerPopup();
+          }
+        }, 150);
+      }
+    });
+
+    marker.addEventListener('mouseleave', () => {
+      if (this.currentHoverMarker === marker) {
+        this.clearHoverTimer();
+        this.currentHoverMarker = null;
+      }
     });
 
     return marker;
+  }
+
+  private handleMouseMove(e: MouseEvent): void {
+    if (!this.autoPopupHover || this.markers.length === 0) return;
+
+    const mouseX = e.clientX;
+    const mouseY = e.clientY;
+
+    let hitMarker: HTMLElement | null = null;
+    for (const marker of this.markers) {
+      const b = marker.getBoundingClientRect();
+      if (
+        mouseX >= b.left - 2 &&
+        mouseX <= b.right + 2 &&
+        mouseY >= b.top - 2 &&
+        mouseY <= b.bottom + 4
+      ) {
+        hitMarker = marker;
+        break;
+      }
+    }
+
+    if (hitMarker) {
+      if (this.currentHoverMarker !== hitMarker) {
+        this.clearHoverTimer();
+        this.currentHoverMarker = hitMarker;
+        this.hoverTimer = setTimeout(() => {
+          if (this.currentHoverMarker === hitMarker && hitMarker) {
+            hitMarker.click();
+          }
+        }, 150);
+      }
+    } else {
+      if (this.currentHoverMarker) {
+        this.clearHoverTimer();
+        this.currentHoverMarker = null;
+      }
+    }
   }
 
   private attachScrollAndResizeListeners(): void {
@@ -276,11 +398,15 @@ export class OverlayManager {
     this.resizeListener = () => {
       this.repositionAll();
     };
+    this.mouseMoveListener = (e: MouseEvent) => {
+      this.handleMouseMove(e);
+    };
 
     window.addEventListener('scroll', this.scrollListener, { passive: true });
     window.addEventListener('resize', this.resizeListener, { passive: true });
     if (this.activeElement) {
       this.activeElement.addEventListener('scroll', this.scrollListener, { passive: true });
+      this.activeElement.addEventListener('mousemove', this.mouseMoveListener, { passive: true });
     }
   }
 
@@ -295,6 +421,12 @@ export class OverlayManager {
     if (this.resizeListener) {
       window.removeEventListener('resize', this.resizeListener);
       this.resizeListener = null;
+    }
+    if (this.mouseMoveListener) {
+      if (this.activeElement) {
+        this.activeElement.removeEventListener('mousemove', this.mouseMoveListener);
+      }
+      this.mouseMoveListener = null;
     }
   }
 

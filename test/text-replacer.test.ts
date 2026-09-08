@@ -39,4 +39,52 @@ describe('TextReplacer', () => {
 
     div.remove();
   });
+
+  it('replaces active selection using savedInputTarget when focus was shifted to popup', () => {
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.value = 'I has an error here';
+    document.body.appendChild(input);
+
+    // Simulate focus shifted away to a popup button
+    const button = document.createElement('button');
+    document.body.appendChild(button);
+    button.focus();
+
+    document.execCommand = vi.fn().mockReturnValue(false);
+
+    // Target "has" at index 2..5
+    const savedInputTarget = {
+      element: input,
+      start: 2,
+      end: 5
+    };
+
+    const replaced = TextReplacer.replaceActiveSelection('have', null, savedInputTarget);
+    expect(replaced).toBe(true);
+    expect(input.value).toBe('I have an error here');
+    expect(savedInputTarget.end).toBe(6); // 2 + 4 ("have".length)
+
+    input.remove();
+    button.remove();
+  });
+
+  it('rejects replace on truly read-only or disabled input', () => {
+    const input = document.createElement('input');
+    input.readOnly = true;
+    input.value = 'Static content';
+    document.body.appendChild(input);
+
+    const savedInputTarget = {
+      element: input,
+      start: 0,
+      end: 6
+    };
+
+    const replaced = TextReplacer.replaceActiveSelection('Dynamic', null, savedInputTarget);
+    expect(replaced).toBe(false);
+    expect(input.value).toBe('Static content');
+
+    input.remove();
+  });
 });

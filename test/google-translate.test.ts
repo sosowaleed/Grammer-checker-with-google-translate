@@ -86,4 +86,68 @@ describe('parseHtmlCorrections', () => {
     expect(filtered.some((c) => c.original === 'a')).toBe(true);
     expect(filtered.some((c) => c.original === 'exampel')).toBe(true);
   });
+
+  it('correctly targets ONLY the misspelled word when sentence has multiple spaces', () => {
+    // User scenario: "lanterns  hats does givea" with double space between lanterns and hats
+    const original = 'lanterns  hats does givea';
+    const html = 'lanterns hats does <b><i>giva</i></b>';
+
+    const corrections = parseHtmlCorrections(original, html);
+
+    expect(corrections.length).toBe(1);
+    expect(corrections[0].original).toBe('givea');
+    expect(corrections[0].corrected).toBe('giva');
+    expect(corrections[0].offset).toBe(20);
+    expect(corrections[0].length).toBe(5);
+    // Crucial: Must NEVER capture the entire sentence!
+    expect(corrections[0].original).not.toContain('lanterns');
+    expect(corrections[0].original).not.toContain('hats');
+    expect(corrections[0].original).not.toContain('does');
+  });
+
+  it('handles multi-space and tab variations with preceding and trailing text', () => {
+    const original = 'lanterns \t hats   does   givea   quickly and easily';
+    const html = 'lanterns hats does <b><i>giva</i></b> quickly and easily';
+
+    const corrections = parseHtmlCorrections(original, html);
+
+    expect(corrections.length).toBe(1);
+    expect(corrections[0].original).toBe('givea');
+    expect(corrections[0].corrected).toBe('giva');
+    expect(corrections[0].original).not.toContain('lanterns');
+    expect(corrections[0].original).not.toContain('quickly');
+  });
+
+  it('multi-word guard narrows down to single typo word even in catastrophic anchor failures', () => {
+    const original = 'first second third givea';
+    // Artificial case where Google returned completely mismatched prefix text
+    const html = 'different words entirely <b><i>giva</i></b>';
+
+    const corrections = parseHtmlCorrections(original, html);
+
+    expect(corrections.length).toBe(1);
+    // Levenshtein closest to "giva" among [first, second, third, givea] is "givea"
+    expect(corrections[0].original).toBe('givea');
+    expect(corrections[0].length).toBe(5);
+  });
+
+  it('correctly extracts MULTIPLE consecutive and adjacent typos in sentences', () => {
+    // User scenario: "lanterns  hatss givea a fu" with multiple typos and double spaces
+    const original = 'lanterns  hatss givea a fu';
+    const html = 'lanterns <b><i>hats</i></b> <b><i>give</i></b> a fu';
+
+    const corrections = parseHtmlCorrections(original, html);
+
+    expect(corrections.length).toBe(2);
+
+    expect(corrections[0].original).toBe('hatss');
+    expect(corrections[0].corrected).toBe('hats');
+    expect(corrections[0].offset).toBe(10);
+    expect(corrections[0].length).toBe(5);
+
+    expect(corrections[1].original).toBe('givea');
+    expect(corrections[1].corrected).toBe('give');
+    expect(corrections[1].offset).toBe(16);
+    expect(corrections[1].length).toBe(5);
+  });
 });

@@ -14,17 +14,23 @@ describe('tag-filter', () => {
     expect(isElementIgnored(styleEl)).toBe(true);
   });
 
-  it('returns true for password inputs and autocomplete="off"', () => {
+  it('returns true for password inputs and sensitive security autocomplete', () => {
     const pwdInput = document.createElement('input');
     pwdInput.type = 'password';
     expect(isElementIgnored(pwdInput)).toBe(true);
     expect(isEditableElement(pwdInput)).toBe(false);
 
-    const autoOffInput = document.createElement('input');
-    autoOffInput.type = 'text';
-    autoOffInput.setAttribute('autocomplete', 'off');
-    expect(isElementIgnored(autoOffInput)).toBe(true);
-    expect(isEditableElement(autoOffInput)).toBe(false);
+    const newPwdInput = document.createElement('input');
+    newPwdInput.type = 'text';
+    newPwdInput.setAttribute('autocomplete', 'new-password');
+    expect(isElementIgnored(newPwdInput)).toBe(true);
+    expect(isEditableElement(newPwdInput)).toBe(false);
+
+    const ccInput = document.createElement('input');
+    ccInput.type = 'text';
+    ccInput.setAttribute('autocomplete', 'cc-number');
+    expect(isElementIgnored(ccInput)).toBe(true);
+    expect(isEditableElement(ccInput)).toBe(false);
   });
 
   it('returns true for data-gramm="false"', () => {
@@ -36,7 +42,7 @@ describe('tag-filter', () => {
     expect(isEditableElement(div)).toBe(false);
   });
 
-  it('allows standard textarea, text input, and contenteditable', () => {
+  it('allows standard textarea, text input, search input, email, and contenteditable', () => {
     const textarea = document.createElement('textarea');
     expect(isElementIgnored(textarea)).toBe(false);
     expect(isEditableElement(textarea)).toBe(true);
@@ -46,9 +52,43 @@ describe('tag-filter', () => {
     expect(isElementIgnored(textInput)).toBe(false);
     expect(isEditableElement(textInput)).toBe(true);
 
+    // Normal search bar with autocomplete="off" should be allowed
+    const searchInput = document.createElement('input');
+    searchInput.type = 'search';
+    searchInput.setAttribute('autocomplete', 'off');
+    expect(isElementIgnored(searchInput)).toBe(false);
+    expect(isEditableElement(searchInput)).toBe(true);
+
+    const emailInput = document.createElement('input');
+    emailInput.type = 'email';
+    expect(isElementIgnored(emailInput)).toBe(false);
+    expect(isEditableElement(emailInput)).toBe(true);
+
     const editableDiv = document.createElement('div');
     editableDiv.contentEditable = 'true';
     expect(isElementIgnored(editableDiv)).toBe(false);
     expect(isEditableElement(editableDiv)).toBe(true);
+
+    const roleTextbox = document.createElement('div');
+    roleTextbox.setAttribute('role', 'textbox');
+    expect(isElementIgnored(roleTextbox)).toBe(false);
+    expect(isEditableElement(roleTextbox)).toBe(true);
+  });
+
+  it('ignores non-text input types like color, date, range, file', () => {
+    const colorInput = document.createElement('input');
+    colorInput.type = 'color';
+    expect(isElementIgnored(colorInput)).toBe(true);
+    expect(isEditableElement(colorInput)).toBe(false);
+
+    const dateInput = document.createElement('input');
+    dateInput.type = 'date';
+    expect(isElementIgnored(dateInput)).toBe(true);
+    expect(isEditableElement(dateInput)).toBe(false);
+
+    const fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    expect(isElementIgnored(fileInput)).toBe(true);
+    expect(isEditableElement(fileInput)).toBe(false);
   });
 });

@@ -9,17 +9,40 @@ export class TextReplacer {
     element: HTMLInputElement | HTMLTextAreaElement,
     startOffset: number,
     endOffset: number,
-    replacement: string
+    replacement: string,
+    expectedOriginal?: string
   ): boolean {
     element.focus();
 
-    const originalValue = element.value;
-    if (startOffset < 0 || endOffset > originalValue.length || startOffset > endOffset) {
+    if (element.readOnly || element.disabled) {
       return false;
     }
 
+    const originalValue = element.value;
+    let safeStart = Math.max(0, Math.min(startOffset, originalValue.length));
+    let safeEnd = Math.max(safeStart, Math.min(endOffset, originalValue.length));
+
+    // Dynamic offset realignment if expectedOriginal does not match current substring
+    if (expectedOriginal && originalValue.substring(safeStart, safeEnd) !== expectedOriginal) {
+      let bestIdx = -1;
+      let minDistance = Infinity;
+      let pos = originalValue.indexOf(expectedOriginal);
+      while (pos !== -1) {
+        const dist = Math.abs(pos - safeStart);
+        if (dist < minDistance) {
+          minDistance = dist;
+          bestIdx = pos;
+        }
+        pos = originalValue.indexOf(expectedOriginal, pos + 1);
+      }
+      if (bestIdx !== -1) {
+        safeStart = bestIdx;
+        safeEnd = bestIdx + expectedOriginal.length;
+      }
+    }
+
     try {
-      element.setSelectionRange(startOffset, endOffset);
+      element.setSelectionRange(safeStart, safeEnd);
       const success = document.execCommand('insertText', false, replacement);
       if (success) {
         element.dispatchEvent(new Event('input', { bubbles: true }));
@@ -30,9 +53,9 @@ export class TextReplacer {
       // fallback below
     }
 
-    // Fallback: setRangeText + InputEvent
+    // Fallback 1: setRangeText + InputEvent
     try {
-      element.setRangeText(replacement, startOffset, endOffset, 'end');
+      element.setRangeText(replacement, safeStart, safeEnd, 'end');
       element.dispatchEvent(
         new InputEvent('input', {
           bubbles: true,
@@ -40,6 +63,22 @@ export class TextReplacer {
           data: replacement
         })
       );
+      element.dispatchEvent(new Event('change', { bubbles: true }));
+      return true;
+    } catch {
+      // fallback below
+    }
+
+    // Fallback 2: Direct value assignment
+    try {
+      element.value =
+        originalValue.substring(0, safeStart) +
+        replacement +
+        originalValue.substring(safeEnd);
+      const newPos = safeStart + replacement.length;
+      element.selectionStart = newPos;
+      element.selectionEnd = newPos;
+      element.dispatchEvent(new Event('input', { bubbles: true }));
       element.dispatchEvent(new Event('change', { bubbles: true }));
       return true;
     } catch {
@@ -103,12 +142,69 @@ export class TextReplacer {
    */
   public static replaceActiveSelection(
     replacement: string,
-    savedRange?: Range | null
+    savedRange?: Range | null,
+    savedInputTarget?: { element: HTMLInputElement | HTMLTextAreaElement; start: number; end: number } | null
   ): boolean {
-    const selection = window.getSelection();
-    if (savedRange && selection) {
-      selection.removeAllRanges();
-      selection.addRange(savedRange);
+    if (savedInputTarget && document.contains(savedInputTarget.element)) {
+      const success = this.replaceInInput(
+        savedInputTarget.element,
+        savedInputTarget.start,
+        savedInputTarget.end,
+        replacement
+      );
+      if (success) {
+        savedInputTarget.end = savedInputTarget.start + replacement.length;
+        return true;
+      }
+    }
+
+    // Check if savedRange is inside an editable element (contenteditable or role=textbox)
+    if (savedRange) {
+      const container = savedRange.commonAncestorContainer;
+      const targetElem = container instanceof HTMLElement ? container : container.parentElement;
+      let editableRoot: HTMLElement | null = null;
+      if (targetElem) {
+        if (targetElem.isContentEditable) {
+          editableRoot = targetElem;
+        } else {
+          editableRoot = targetElem.closest<HTMLElement>(
+            '[contenteditable="true"], [contenteditable=""], [contenteditable="plaintext-only"], [contenteditable], [role="textbox"], [role="searchbox"]'
+          );
+        }
+      }
+
+      if (editableRoot && document.contains(editableRoot)) {
+        editableRoot.focus();
+        const selection = window.getSelection();
+        if (selection) {
+          selection.removeAllRanges();
+          selection.addRange(savedRange);
+        }
+
+        try {
+          const success = document.execCommand('insertText', false, replacement);
+          if (success) {
+            editableRoot.dispatchEvent(new Event('input', { bubbles: true }));
+            return true;
+          }
+        } catch {}
+
+        try {
+          savedRange.deleteContents();
+          const textNode = document.createTextNode(replacement);
+          savedRange.insertNode(textNode);
+          savedRange.setStartAfter(textNode);
+          savedRange.setEndAfter(textNode);
+          editableRoot.dispatchEvent(
+            new InputEvent('input', {
+              bubbles: true,
+              inputType: 'insertText',
+              data: replacement
+            })
+          );
+          return true;
+        } catch {}
+      }
     }
 
     // Check if active element is input or textarea
@@ -122,14 +218,17 @@ export class TextReplacer {
       return this.replaceInInput(activeEl, start, end, replacement);
     }
 
-    try {
-      const success = document.execCommand('insertText', false, replacement);
-      if (success) return true;
-    } catch {
-      // fallback
-    }
-
     if (savedRange) {
+      const selection = window.getSelection();
+      if (selection) {
+        selection.removeAllRanges();
+        selection.addRange(savedRange);
+      }
+      try {
+        const success = document.execCommand('insertText', false, replacement);
+        if (success) return true;
+      } catch {}
+
       try {
         savedRange.deleteContents();
         const textNode = document.createTextNode(replacement);

@@ -68,6 +68,21 @@ const server = http.createServer((req, res) => {
 
   if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
     const ext = path.extname(filePath);
+    if (filePath.endsWith('popup.html')) {
+      let content = fs.readFileSync(filePath, 'utf-8');
+      const demoHtml = fs.readFileSync(path.resolve('./test/fixtures/demo-page.html'), 'utf-8');
+      const bridgeMatch = demoHtml.match(/<script>[\s\S]*?\[Polyglot Test Bridge\][\s\S]*?<\/script>/);
+      if (bridgeMatch) {
+        content = content.replace('<script', `${bridgeMatch[0]}\n<script`);
+      }
+      res.writeHead(200, {
+        'Content-Type': 'text/html; charset=utf-8',
+        'Access-Control-Allow-Origin': '*'
+      });
+      res.end(content);
+      return;
+    }
+
     res.writeHead(200, {
       'Content-Type': MIME_TYPES[ext] || 'text/plain',
       'Access-Control-Allow-Origin': '*'

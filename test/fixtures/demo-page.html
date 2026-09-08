@@ -180,35 +180,45 @@
         <p class="instruction">Edit directly. Click any squiggly underline to apply correction while preserving Ctrl+Z.</p>
       </div>
 
-      <!-- Section 4: Read-Only Selection (Synonyms & Translate) -->
+      <!-- Section 4: Read-Only Selection (Sentence Spell Check & Translate) -->
       <div class="section-card">
         <h2>
-          <span>4. Read-Only Selection Explorer</span>
+          <span>4. Sentence & Word Spell Checking on Highlight (Google Translate Style)</span>
           <span class="badge">Drag or Double-Click</span>
         </h2>
         <div class="readonly-text" id="test-readonly">
-          The brilliant scientist presented an extraordinarily innovative idea to solve global climate challenges. Every participant was delighted and expressed sincere appreciation for the breathtaking discovery.
+          Review the memory archeticture and see if it needs any improvement
         </div>
         <p class="instruction">
-          • Double-click <b>"brilliant"</b> or <b>"delighted"</b> to view Synonyms grouped by Part of Speech.<br/>
-          • Highlight the entire first sentence to instantly test Multi-Word Translation into Spanish, French, or German.
+          • <b>Highlight the full sentence above:</b> Polyglot checks spelling first and shows <i>"Showing correction for: Review the memory <b>architecture</b> and see if it needs any improvement"</i> with a 1-click <b>Apply Correction</b> button!<br/>
+          • <b>Highlight just "archeticture":</b> Polyglot suggests <i>"Did you mean: architecture?"</i> with 1-click replace and synonyms explorer!
         </p>
       </div>
 
-      <!-- Section 5: Filtered Elements -->
+      <!-- Section 5: Universal Input Field Support -->
       <div class="section-card">
         <h2>
-          <span>5. Safety Tag Exclusions</span>
-          <span class="badge">Ignored by Extension</span>
+          <span>5. Universal Input Field Support</span>
+          <span class="badge">Works on All Inputs</span>
         </h2>
         <div class="grid-2">
           <div>
-            <label class="instruction" for="test-password">Password field (ignored):</label>
-            <input type="password" id="test-password" value="Secret123" />
+            <label class="instruction" for="test-search">Search Input (autocomplete="off"):</label>
+            <input type="search" id="test-search" autocomplete="off" value="find speling eror in query" />
           </div>
           <div>
-            <label class="instruction" for="test-autocomplete-off">autocomplete="off" (ignored):</label>
-            <input type="text" id="test-autocomplete-off" autocomplete="off" value="Ignored input field" />
+            <label class="instruction" for="test-email">Email / Text Input:</label>
+            <input type="text" id="test-email" value="Send this to the archeticture team" />
+          </div>
+          <div>
+            <label class="instruction" for="test-role-textbox">Role="textbox" (Discord/Slack/Notion style):</label>
+            <div role="textbox" id="test-role-textbox" class="editable-box" contenteditable="true">
+              Type or highlight here to test archeticture and speling fixes.
+            </div>
+          </div>
+          <div>
+            <label class="instruction" for="test-password">Password field (Safely Ignored):</label>
+            <input type="password" id="test-password" value="Secret123" />
           </div>
         </div>
       </div>
@@ -235,6 +245,44 @@
             return text.replace(/&#39;/g, "'").replace(/&quot;/g, '"').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>');
           }
 
+          function levenshtein(a, b) {
+            const m = a.length, n = b.length;
+            const d = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
+            for (let i = 0; i <= m; i++) d[i][0] = i;
+            for (let j = 0; j <= n; j++) d[0][j] = j;
+            for (let i = 1; i <= m; i++) {
+              for (let j = 1; j <= n; j++) {
+                const cost = a[i - 1].toLowerCase() === b[j - 1].toLowerCase() ? 0 : 1;
+                d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + cost);
+              }
+            }
+            return d[m][n];
+          }
+
+          function findAnchor(text, anchor, startFrom) {
+            if (!anchor) return { start: startFrom, end: startFrom };
+            const exact = text.indexOf(anchor, startFrom);
+            if (exact !== -1) return { start: exact, end: exact + anchor.length };
+
+            const trimmed = anchor.trim();
+            if (!trimmed) {
+              const ws = /^\s+/.exec(text.substring(startFrom));
+              return ws ? { start: startFrom, end: startFrom + ws[0].length } : { start: startFrom, end: startFrom };
+            }
+            const tokens = trimmed.split(/\s+/).map(t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+            const pattern = new RegExp(tokens.join('\\s+'), 'i');
+            const match = pattern.exec(text.substring(startFrom));
+            if (match) {
+              let matchEnd = startFrom + match.index + match[0].length;
+              if (/\s$/.test(anchor) && matchEnd < text.length && /\s/.test(text[matchEnd])) {
+                const trailingWs = /^\s+/.exec(text.substring(matchEnd));
+                if (trailingWs) matchEnd += trailingWs[0].length;
+              }
+              return { start: startFrom + match.index, end: matchEnd };
+            }
+            return null;
+          }
+
           function parseHtmlCorrections(originalText, htmlCorrected) {
             const corrections = [];
             if (!htmlCorrected || !htmlCorrected.includes('<b><i>')) return corrections;
@@ -255,32 +303,123 @@
             }
 
             let ptr = 0;
-            for (let i = 0; i < chunks.length; i++) {
+            let i = 0;
+            while (i < chunks.length) {
               const chunk = chunks[i];
               if (!chunk.isCorrected) {
-                const found = originalText.indexOf(chunk.text, ptr);
-                if (found !== -1) ptr = found + chunk.text.length;
+                if (chunk.text.trim().length > 0) {
+                  const found = findAnchor(originalText, chunk.text, ptr);
+                  if (found) ptr = found.end;
+                }
+                i++;
               } else {
-                const nextUncorr = chunks.slice(i + 1).find(c => !c.isCorrected);
-                const endAnchor = (nextUncorr && nextUncorr.text.length > 0) ? originalText.indexOf(nextUncorr.text, ptr) : originalText.length;
-                if (endAnchor !== -1 && endAnchor >= ptr) {
-                  const originalSnippet = originalText.substring(ptr, endAnchor).trim();
-                  const replacement = chunk.text.trim();
-                  if (originalSnippet.length > 0 && originalSnippet !== replacement) {
-                    const startOffset = originalText.indexOf(originalSnippet, ptr);
+                const group = [];
+                let j = i;
+                while (j < chunks.length) {
+                  if (chunks[j].isCorrected) {
+                    const txt = chunks[j].text.trim();
+                    if (txt.length > 0) group.push(txt);
+                    j++;
+                  } else if (chunks[j].text.trim().length === 0) {
+                    j++;
+                  } else {
+                    break;
+                  }
+                }
+
+                let endAnchor = originalText.length;
+                if (j < chunks.length && chunks[j].text.trim().length > 0) {
+                  const foundNext = findAnchor(originalText, chunks[j].text, ptr);
+                  if (foundNext) endAnchor = foundNext.start;
+                }
+
+                const rawSpan = originalText.substring(ptr, endAnchor);
+                const origWords = [];
+                const wordRegex = /\S+/g;
+                let wm;
+                while ((wm = wordRegex.exec(rawSpan)) !== null) {
+                  origWords.push({ word: wm[0], offset: ptr + wm.index, length: wm[0].length });
+                }
+
+                if (group.length === origWords.length) {
+                  for (let k = 0; k < origWords.length; k++) {
+                    const orig = origWords[k];
+                    const rep = group[k];
+                    if (orig.word !== rep) {
+                      corrections.push({
+                        original: orig.word,
+                        corrected: rep,
+                        offset: orig.offset,
+                        length: orig.length,
+                        explanation: orig.word.toLowerCase() === 'a' && rep.toLowerCase() === 'an'
+                          ? "Grammar: Use 'an' before words starting with vowel sounds."
+                          : "Spelling correction.",
+                        type: orig.word.toLowerCase() === 'a' && rep.toLowerCase() === 'an' ? 'grammar' : 'spelling'
+                      });
+                    }
+                  }
+                } else if (group.length === 1 && origWords.length > 1) {
+                  let best = origWords[origWords.length - 1];
+                  let minD = Infinity;
+                  for (const w of origWords) {
+                    const clean = w.word.replace(/^['"“‘(]+|[)'"”’.,!?:;]+$/g, '');
+                    const dist = levenshtein(clean, group[0]);
+                    if (dist < minD) {
+                      minD = dist;
+                      best = w;
+                    }
+                  }
+                  if (best.word !== group[0]) {
                     corrections.push({
-                      original: originalSnippet,
-                      corrected: replacement,
-                      offset: startOffset !== -1 ? startOffset : ptr,
-                      length: originalSnippet.length,
-                      explanation: originalSnippet.toLowerCase() === 'a' && replacement.toLowerCase() === 'an' 
-                        ? "Grammar: Use 'an' before words starting with vowel sounds."
-                        : "Spelling correction.",
-                      type: originalSnippet.toLowerCase() === 'a' && replacement.toLowerCase() === 'an' ? 'grammar' : 'spelling'
+                      original: best.word,
+                      corrected: group[0],
+                      offset: best.offset,
+                      length: best.length,
+                      explanation: "Spelling correction.",
+                      type: "spelling"
                     });
                   }
-                  ptr = endAnchor;
+                } else if (group.length > 1 && origWords.length === 1) {
+                  const combined = group.join(' ');
+                  corrections.push({
+                    original: origWords[0].word,
+                    corrected: combined,
+                    offset: origWords[0].offset,
+                    length: origWords[0].length,
+                    explanation: "Spelling correction.",
+                    type: "spelling"
+                  });
+                } else {
+                  const used = new Set();
+                  for (const rep of group) {
+                    let bestIdx = -1;
+                    let minD = Infinity;
+                    for (let k = 0; k < origWords.length; k++) {
+                      if (used.has(k)) continue;
+                      const clean = origWords[k].word.replace(/^['"“‘(]+|[)'"”’.,!?:;]+$/g, '');
+                      const dist = levenshtein(clean, rep);
+                      if (dist < minD) {
+                        minD = dist;
+                        bestIdx = k;
+                      }
+                    }
+                    if (bestIdx !== -1 && minD <= 4) {
+                      used.add(bestIdx);
+                      const orig = origWords[bestIdx];
+                      corrections.push({
+                        original: orig.word,
+                        corrected: rep,
+                        offset: orig.offset,
+                        length: orig.length,
+                        explanation: "Spelling correction.",
+                        type: "spelling"
+                      });
+                    }
+                  }
                 }
+
+                ptr = endAnchor;
+                i = j;
               }
             }
             return corrections;
@@ -312,7 +451,7 @@
                     return { success: true };
                   }
                   if (msg.type === 'CHECK_TEXT') {
-                    const target = msg.language || 'es';
+                    let target = 'es';
                     const apiUrl = 'https://clients5.google.com/translate_a/single?client=dict-chrome-ex&sl=auto&tl=' + target + '&dt=t&dt=qc&dt=bd&q=' + encodeURIComponent(msg.text);
                     const res = await fetch('/api/proxy?url=' + encodeURIComponent(apiUrl));
                     const data = await res.json();
@@ -321,6 +460,15 @@
                     let corrections = [];
                     if (qc && qc[0]) {
                       corrections = parseHtmlCorrections(msg.text, qc[0]);
+                    }
+                    if (corrections.length === 0) {
+                      try {
+                        const altRes = await fetch('/api/proxy?url=' + encodeURIComponent('https://clients5.google.com/translate_a/single?client=dict-chrome-ex&sl=auto&tl=en&dt=t&dt=qc&dt=bd&q=' + encodeURIComponent(msg.text)));
+                        const altData = await altRes.json();
+                        if (altData && altData[7] && altData[7][0]) {
+                          corrections = parseHtmlCorrections(msg.text, altData[7][0]);
+                        }
+                      } catch {}
                     }
                     const ignoredSet = new Set((mockSettings.ignoredWords || []).map(w => w.toLowerCase()));
                     corrections = corrections.filter(c => !ignoredSet.has(c.original.trim().toLowerCase()));
@@ -395,6 +543,9 @@
                       }
                     };
                   }
+                  if (msg.type === 'PING') {
+                    return { pong: true, timestamp: Date.now() };
+                  }
                 } catch (err) {
                   return { error: err.message, word: msg.word || '', synonyms: [] };
                 }
@@ -408,6 +559,15 @@
                 if (typeof callback === 'function') callback({ error: err.message, word: msg.word || '', synonyms: [] });
               });
               return p;
+            },
+            connect: function(opts) {
+              return {
+                name: opts && opts.name,
+                postMessage: function() {},
+                onMessage: { addListener: function() {} },
+                onDisconnect: { addListener: function() {} },
+                disconnect: function() {}
+              };
             },
             onMessage: {
               addListener: function() {}

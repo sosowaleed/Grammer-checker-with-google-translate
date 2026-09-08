@@ -74,7 +74,7 @@ async function runBuild() {
   // 5. Copy Icons
   const iconsDest = resolve(outDir, 'icons');
   fs.mkdirSync(iconsDest, { recursive: true });
-  for (const size of [16, 48, 128]) {
+  for (const size of [16, 32, 48, 96, 128]) {
     const srcIcon = resolve(`public/icons/icon${size}.png`);
     if (fs.existsSync(srcIcon)) {
       fs.copyFileSync(srcIcon, resolve(iconsDest, `icon${size}.png`));

@@ -1,6 +1,6 @@
 {
   "name": "polyglot-grammar",
-  "version": "1.2.0",
+  "version": "1.0.7",
   "description": "Cross-browser Manifest V3 extension for real-time grammar checking, contextual synonyms, and multilingual translation powered by Google Translate",
   "type": "module",
   "scripts": {

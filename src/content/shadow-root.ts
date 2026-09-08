@@ -136,33 +136,36 @@ export class ShadowRootHost {
         pointer-events: auto;
         display: flex;
         align-items: center;
-        gap: 4px;
-        padding: 4px 8px;
-        border-radius: 20px;
+        gap: 3px;
+        padding: 2px 6px;
+        border-radius: 12px;
         background: rgba(15, 23, 42, 0.85);
-        backdrop-filter: blur(8px);
-        border: 1px solid rgba(255, 255, 255, 0.12);
+        backdrop-filter: blur(6px);
+        border: 1px solid rgba(255, 255, 255, 0.1);
         color: #94a3b8;
-        font-size: 11px;
+        font-size: 10px;
         font-weight: 500;
         cursor: pointer;
         user-select: none;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
-        transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+        opacity: 0.75;
+        transition: opacity 0.15s ease, transform 0.15s ease;
         z-index: 2147483641;
       }
 
       .polyglot-status-badge:hover {
-        transform: scale(1.05);
+        opacity: 1;
+        transform: scale(1.1);
         background: rgba(30, 41, 59, 0.95);
         color: #f8fafc;
       }
 
       .polyglot-status-badge .badge-dot {
-        width: 7px;
-        height: 7px;
+        width: 5px;
+        height: 5px;
         border-radius: 50%;
         background: #10b981;
+        pointer-events: none;
       }
 
       .polyglot-status-badge.has-errors .badge-dot {
@@ -173,6 +176,125 @@ export class ShadowRootHost {
       .polyglot-status-badge.checking .badge-dot {
         background: #38bdf8;
         animation: polyglotSpin 1s linear infinite;
+      }
+
+      .polyglot-status-badge.compact-icon {
+        width: 14px;
+        height: 14px;
+        padding: 0;
+        border-radius: 50%;
+        justify-content: center;
+        text-align: center;
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+      }
+
+      .polyglot-status-badge.compact-icon.has-errors {
+        background: rgba(244, 63, 94, 0.9);
+        border-color: #f43f5e;
+        box-shadow: 0 0 6px rgba(244, 63, 94, 0.5);
+      }
+
+      .polyglot-status-badge .compact-count {
+        font-size: 8px;
+        font-weight: 700;
+        color: #ffffff;
+        line-height: 1;
+        pointer-events: none;
+      }
+
+      /* Google Translate Style Sentence & Word Corrections */
+      .polyglot-sentence-correction {
+        background: rgba(2, 6, 23, 0.65);
+        border: 1px solid rgba(56, 189, 248, 0.25);
+        border-radius: 8px;
+        padding: 10px 12px;
+        margin-bottom: 10px;
+      }
+
+      .polyglot-correction-caption {
+        font-size: 11px;
+        color: #94a3b8;
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        margin-bottom: 6px;
+      }
+
+      .polyglot-correction-caption svg {
+        color: #38bdf8;
+      }
+
+      .polyglot-corrected-sentence {
+        font-size: 13px;
+        line-height: 1.55;
+        color: #f8fafc;
+        margin-bottom: 10px;
+        word-break: break-word;
+      }
+
+      /* Google Translate bold italic blue diff highlight */
+      .polyglot-diff-highlight {
+        color: #38bdf8;
+        font-weight: 700;
+        font-style: italic;
+        text-decoration: underline;
+        text-decoration-color: rgba(56, 189, 248, 0.45);
+      }
+
+      .polyglot-sentence-actions {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 8px;
+      }
+
+      .polyglot-btn-apply-sentence {
+        background: linear-gradient(135deg, #10b981, #059669);
+        color: #ffffff;
+        border: none;
+        border-radius: 6px;
+        padding: 5px 12px;
+        font-size: 11.5px;
+        font-weight: 600;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        box-shadow: 0 2px 6px rgba(16, 185, 129, 0.3);
+        transition: all 0.15s ease;
+      }
+
+      .polyglot-btn-apply-sentence:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 10px rgba(16, 185, 129, 0.45);
+      }
+
+      .polyglot-tab-badge {
+        background: #f43f5e;
+        color: #ffffff;
+        font-size: 9.5px;
+        font-weight: 700;
+        padding: 1px 5px;
+        border-radius: 10px;
+        margin-left: 4px;
+      }
+
+      .polyglot-fix-chip-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 4px 0;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      }
+
+      .polyglot-floating-pill.has-fixes {
+        border-color: #38bdf8;
+        box-shadow: 0 8px 24px rgba(56, 189, 248, 0.35);
+        background: rgba(15, 23, 42, 0.98);
+      }
+
+      .polyglot-floating-pill.has-fixes svg {
+        color: #38bdf8;
       }
 
       /* Popover Card Glassmorphism */
@@ -411,6 +533,85 @@ export class ShadowRootHost {
         border-color: rgba(99, 102, 241, 0.5);
         color: #ffffff;
         transform: translateY(-1px);
+      }
+
+      /* Definitions View (when word has no synonyms) */
+      .polyglot-definitions-wrap {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        max-height: 240px;
+        overflow-y: auto;
+        padding-right: 4px;
+      }
+
+      .polyglot-def-header {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding-bottom: 4px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      }
+
+      .polyglot-def-badge {
+        font-size: 9.5px;
+        font-weight: 700;
+        text-transform: uppercase;
+        background: rgba(56, 189, 248, 0.2);
+        color: #38bdf8;
+        padding: 2px 6px;
+        border-radius: 4px;
+        border: 1px solid rgba(56, 189, 248, 0.35);
+      }
+
+      .polyglot-def-word {
+        font-size: 13px;
+        font-weight: 700;
+        color: #f8fafc;
+      }
+
+      .polyglot-def-subtext {
+        font-size: 11px;
+        color: #94a3b8;
+        font-style: italic;
+      }
+
+      .polyglot-def-list {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      .polyglot-def-entry {
+        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 6px;
+        padding: 6px 9px;
+      }
+
+      .polyglot-def-pos {
+        font-size: 10px;
+        font-weight: 700;
+        text-transform: uppercase;
+        color: #818cf8;
+        letter-spacing: 0.4px;
+        display: inline-block;
+        margin-bottom: 3px;
+      }
+
+      .polyglot-def-gloss {
+        font-size: 12px;
+        color: #e2e8f0;
+        line-height: 1.45;
+      }
+
+      .polyglot-def-example {
+        font-size: 11px;
+        color: #94a3b8;
+        font-style: italic;
+        margin-top: 4px;
+        padding-left: 6px;
+        border-left: 2px solid rgba(99, 102, 241, 0.4);
       }
 
       /* Translation View */

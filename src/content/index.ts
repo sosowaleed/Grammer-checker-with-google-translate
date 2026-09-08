@@ -2,9 +2,10 @@ import { ShadowRootHost } from './shadow-root';
 import { isEditableElement, isElementIgnored } from './tag-filter';
 import { OverlayManager } from './overlay-manager';
 import { SelectionPopup } from './selection-popup';
+import { CorrectionPopup } from './correction-popup';
 import { UserSettings, CheckTextResponse, DEFAULT_SETTINGS, ExtensionMessage } from '../shared/types';
 
-import { sendRuntimeMessage } from '../shared/messaging';
+import { sendRuntimeMessage, KeepAliveManager } from '../shared/messaging';
 
 class PolyglotContentScript {
   private overlayManager: OverlayManager;
@@ -23,6 +24,7 @@ class PolyglotContentScript {
     this.setupTypingObserver();
     this.setupSelectionObserver();
     this.setupMessageListener();
+    this.setupStorageObserver();
 
     // 3. Fetch user settings asynchronously without blocking
     this.fetchSettings();
@@ -34,9 +36,25 @@ class PolyglotContentScript {
       if (settings && typeof settings.enabled === 'boolean') {
         this.currentSettings = { ...DEFAULT_SETTINGS, ...settings };
         this.currentDetectedLanguage = this.currentSettings.preferredLanguage || 'en';
+        this.overlayManager.setAutoPopupHover(this.currentSettings.autoPopupOnHover !== false);
       }
     } catch {
       // Keep defaults
+    }
+  }
+
+  private setupStorageObserver(): void {
+    if (typeof chrome !== 'undefined' && chrome.storage?.onChanged) {
+      chrome.storage.onChanged.addListener((changes, areaName) => {
+        if ((areaName === 'local' || areaName === 'sync') && changes.polyglot_settings) {
+          const newSettings = changes.polyglot_settings.newValue;
+          if (newSettings) {
+            this.currentSettings = { ...DEFAULT_SETTINGS, ...newSettings };
+            this.currentDetectedLanguage = this.currentSettings.preferredLanguage || 'en';
+            this.overlayManager.setAutoPopupHover(this.currentSettings.autoPopupOnHover !== false);
+          }
+        }
+      });
     }
   }
 
@@ -46,6 +64,7 @@ class PolyglotContentScript {
       if (!target || !isEditableElement(target)) return;
 
       this.activeElement = target;
+      KeepAliveManager.activate();
 
       if (this.debounceTimer) {
         clearTimeout(this.debounceTimer);
@@ -66,6 +85,7 @@ class PolyglotContentScript {
       const target = e.target as HTMLElement | null;
       if (target && isEditableElement(target)) {
         this.activeElement = target;
+        KeepAliveManager.activate();
         const text = this.getElementText(target);
         if (text.trim().length >= 2) {
           setTimeout(() => this.checkElementText(target), 150);
@@ -82,13 +102,18 @@ class PolyglotContentScript {
           return;
         }
         setTimeout(() => {
+          if (CorrectionPopup.isOpen()) {
+            return;
+          }
           if (!this.activeElement || !document.contains(this.activeElement)) {
             this.overlayManager.clear();
+            this.activeElement = null;
           } else if (
             document.activeElement !== this.activeElement &&
             !this.activeElement.contains(document.activeElement)
           ) {
             this.overlayManager.clear();
+            this.activeElement = null;
           }
         }, 220);
       },
@@ -99,7 +124,12 @@ class PolyglotContentScript {
   private getElementText(element: HTMLElement): string {
     if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement) {
       return element.value;
-    } else if (element.isContentEditable) {
+    } else if (element.isContentEditable || element.getAttribute('contenteditable') === 'true') {
+      return element.innerText || element.textContent || '';
+    } else if (
+      element.getAttribute('role') === 'textbox' ||
+      element.getAttribute('role') === 'searchbox'
+    ) {
       return element.innerText || element.textContent || '';
     }
     return '';
@@ -177,8 +207,34 @@ class PolyglotContentScript {
       }
 
       setTimeout(() => {
+        const autoPopup = Boolean(this.currentSettings?.autoPopupOnHighlight);
+
+        // 1. Form control selection check (crucial for Firefox where window.getSelection is empty for inputs/textareas)
+        const activeEl = document.activeElement;
+        if (
+          activeEl &&
+          (activeEl instanceof HTMLInputElement || activeEl instanceof HTMLTextAreaElement) &&
+          !isElementIgnored(activeEl)
+        ) {
+          const start = activeEl.selectionStart;
+          const end = activeEl.selectionEnd;
+          if (start !== null && end !== null && end > start) {
+            const rawSelected = activeEl.value.substring(start, end);
+            if (rawSelected.trim().length > 0) {
+              SelectionPopup.handleInputSelection(activeEl, rawSelected, start, end, autoPopup);
+              return;
+            }
+          }
+        }
+
+        // 2. Window DOM selection (contenteditable and regular page text)
         const sel = window.getSelection();
-        if (!sel) return;
+        if (!sel || sel.isCollapsed || sel.rangeCount === 0) {
+          if (!activeEl || !(activeEl instanceof HTMLInputElement || activeEl instanceof HTMLTextAreaElement)) {
+            SelectionPopup.close();
+          }
+          return;
+        }
 
         // Check if selection anchor is within an ignored element
         const anchorNode = sel.anchorNode;
@@ -187,7 +243,7 @@ class PolyglotContentScript {
           return;
         }
 
-        SelectionPopup.handleSelection(sel);
+        SelectionPopup.handleSelection(sel, autoPopup);
       }, 20);
     };
 
@@ -207,16 +263,32 @@ class PolyglotContentScript {
   private setupMessageListener(): void {
     const messageHandler = (message: any) => {
       if (message && message.type === 'OPEN_TRANSLATE_POPUP') {
-        const sel = window.getSelection();
-        let rect: DOMRect;
-        if (sel && !sel.isCollapsed && sel.rangeCount > 0) {
-          rect = sel.getRangeAt(0).getBoundingClientRect();
+        let rect: DOMRect | null = null;
+
+        // Check active form control first
+        const activeEl = document.activeElement;
+        if (activeEl && (activeEl instanceof HTMLInputElement || activeEl instanceof HTMLTextAreaElement)) {
+          const inputRect = activeEl.getBoundingClientRect();
+          rect = new DOMRect(inputRect.left + 20, inputRect.top, 200, 30);
         } else {
+          const sel = window.getSelection();
+          if (sel && !sel.isCollapsed && sel.rangeCount > 0) {
+            rect = sel.getRangeAt(0).getBoundingClientRect();
+          }
+        }
+
+        if (!rect) {
           rect = new DOMRect(window.innerWidth / 2 - 150, 100, 300, 50);
         }
         SelectionPopup.openCard(message.selectedText || '', rect, 'translate');
       } else if (message && message.type === 'SETTINGS_UPDATED') {
-        this.fetchSettings();
+        if (message.settings) {
+          this.currentSettings = { ...DEFAULT_SETTINGS, ...message.settings };
+          this.currentDetectedLanguage = this.currentSettings.preferredLanguage || 'en';
+          this.overlayManager.setAutoPopupHover(this.currentSettings.autoPopupOnHover !== false);
+        } else {
+          this.fetchSettings();
+        }
       }
     };
 

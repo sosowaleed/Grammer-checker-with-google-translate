@@ -13,6 +13,12 @@ export interface SynonymGroup {
   terms: string[];
 }
 
+export interface WordDefinition {
+  pos: string;
+  gloss: string;
+  example?: string;
+}
+
 export interface TranslationResult {
   originalText: string;
   translatedText: string;
@@ -23,7 +29,10 @@ export interface TranslationResult {
 export interface UserSettings {
   enabled: boolean;
   preferredLanguage: string;
+  uiLanguage: string;
   autoCheckGrammar: boolean;
+  autoPopupOnHighlight: boolean;
+  autoPopupOnHover: boolean;
   ignoredDomains: string[];
   ignoredWords: string[];
   theme: 'dark' | 'light' | 'auto';
@@ -38,7 +47,10 @@ export interface UserSettings {
 export const DEFAULT_SETTINGS: UserSettings = {
   enabled: true,
   preferredLanguage: 'en',
+  uiLanguage: 'en',
   autoCheckGrammar: true,
+  autoPopupOnHighlight: false,
+  autoPopupOnHover: true,
   ignoredDomains: [],
   ignoredWords: [],
   theme: 'dark',
@@ -60,7 +72,8 @@ export type ExtensionMessage =
   | { type: 'IGNORE_WORD'; word: string }
   | { type: 'UNIGNORE_WORD'; word: string }
   | { type: 'RECORD_STAT'; stat: keyof UserSettings['stats']; count?: number }
-  | { type: 'OPEN_TRANSLATE_POPUP'; selectedText: string };
+  | { type: 'OPEN_TRANSLATE_POPUP'; selectedText: string }
+  | { type: 'PING' };
 
 export type CheckTextResponse = {
   corrections: GrammarCorrection[];
@@ -71,6 +84,7 @@ export type CheckTextResponse = {
 export type SynonymsResponse = {
   word: string;
   synonyms: SynonymGroup[];
+  definitions?: WordDefinition[];
   detectedLanguage: string;
   error?: string;
 };

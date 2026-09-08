@@ -1,5 +1,13 @@
-import { UserSettings, DEFAULT_SETTINGS } from '../shared/types';
+import {
+  UserSettings,
+  DEFAULT_SETTINGS,
+  CheckTextResponse,
+  SynonymsResponse,
+  GrammarCorrection
+} from '../shared/types';
 import { SUPPORTED_LANGUAGES, POPULAR_LANGUAGES } from '../shared/languages';
+import { KeepAliveManager } from '../shared/messaging';
+import { getAvailableUiLanguages, applyTranslations, t } from '../shared/l10n';
 
 function sendPopupMessage<T = any>(message: any): Promise<T> {
   return new Promise((resolve) => {
@@ -27,9 +35,60 @@ function sendPopupMessage<T = any>(message: any): Promise<T> {
   });
 }
 
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function escapeRegExp(string: string): string {
+  return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function buildCorrectedSentence(
+  originalText: string,
+  corrections: GrammarCorrection[]
+): { correctedText: string; htmlHighlighted: string } {
+  if (!corrections || corrections.length === 0) {
+    return {
+      correctedText: originalText,
+      htmlHighlighted: escapeHtml(originalText)
+    };
+  }
+
+  const sorted = [...corrections].sort((a, b) => a.offset - b.offset);
+  let correctedText = '';
+  let htmlHighlighted = '';
+  let lastIndex = 0;
+
+  for (const corr of sorted) {
+    if (corr.offset < lastIndex) continue;
+    const before = originalText.substring(lastIndex, corr.offset);
+    correctedText += before + corr.corrected;
+    htmlHighlighted +=
+      escapeHtml(before) +
+      `<span class="polyglot-diff-highlight">${escapeHtml(corr.corrected)}</span>`;
+    lastIndex = corr.offset + corr.length;
+  }
+
+  if (lastIndex < originalText.length) {
+    const after = originalText.substring(lastIndex);
+    correctedText += after;
+    htmlHighlighted += escapeHtml(after);
+  }
+
+  return { correctedText, htmlHighlighted };
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
   const masterToggle = document.getElementById('masterToggle') as HTMLInputElement;
   const grammarToggle = document.getElementById('grammarToggle') as HTMLInputElement;
+  const autoPopupHighlightToggle = document.getElementById('autoPopupHighlightToggle') as HTMLInputElement;
+  const autoPopupHoverToggle = document.getElementById('autoPopupHoverToggle') as HTMLInputElement;
+  const uiLanguageSelect = document.getElementById('uiLanguageSelect') as HTMLSelectElement;
   const languageSelect = document.getElementById('languageSelect') as HTMLSelectElement;
   const statusPill = document.getElementById('statusPill') as HTMLElement;
   const statusText = document.getElementById('statusText') as HTMLElement;
@@ -43,9 +102,22 @@ document.addEventListener('DOMContentLoaded', async () => {
   const wordInput = document.getElementById('wordInput') as HTMLInputElement;
   const addWordBtn = document.getElementById('addWordBtn') as HTMLButtonElement;
   const playgroundText = document.getElementById('playgroundText') as HTMLTextAreaElement;
+  const playgroundPill = document.getElementById('playgroundPill') as HTMLElement;
+  const playgroundPillDot = document.getElementById('playgroundPillDot') as HTMLElement;
+  const playgroundPillText = document.getElementById('playgroundPillText') as HTMLElement;
+  const playgroundPopover = document.getElementById('playgroundPopover') as HTMLElement;
+  const playgroundPopoverBody = document.getElementById('playgroundPopoverBody') as HTMLElement;
+  const playgroundPopoverClose = document.getElementById('playgroundPopoverClose') as HTMLButtonElement;
+  const playgroundIssues = document.getElementById('playgroundIssues') as HTMLElement;
   const loadSample = document.getElementById('loadSample') as HTMLElement;
 
-  // Populate languages
+  // Populate UI Languages
+  const uiLanguages = getAvailableUiLanguages();
+  uiLanguageSelect.innerHTML = uiLanguages
+    .map((l) => `<option value="${l.code}">${l.nativeName} (${l.name})</option>`)
+    .join('');
+
+  // Populate Target Languages
   let langHtml = '<optgroup label="Popular Languages">';
   for (const code of POPULAR_LANGUAGES) {
     const lang = SUPPORTED_LANGUAGES.find((l) => l.code === code);
@@ -69,18 +141,29 @@ document.addEventListener('DOMContentLoaded', async () => {
     settings = { ...DEFAULT_SETTINGS };
   }
 
-  // Update UI with settings
+  // Apply UI translations based on saved language
+  function applyCurrentTranslations() {
+    const lang = settings.uiLanguage || 'en';
+    applyTranslations(lang);
+  }
+
+  // Update UI elements with settings
   function updateUI() {
     masterToggle.checked = settings.enabled;
     grammarToggle.checked = settings.autoCheckGrammar;
+    autoPopupHighlightToggle.checked = Boolean(settings.autoPopupOnHighlight);
+    autoPopupHoverToggle.checked = settings.autoPopupOnHover !== false;
+    uiLanguageSelect.value = settings.uiLanguage || 'en';
     languageSelect.value = settings.preferredLanguage || 'en';
+
+    applyCurrentTranslations();
 
     if (settings.enabled) {
       statusPill.classList.remove('disabled');
-      statusText.textContent = 'Active';
+      statusText.textContent = t('status_active', settings.uiLanguage);
     } else {
       statusPill.classList.add('disabled');
-      statusText.textContent = 'Disabled';
+      statusText.textContent = t('status_disabled', settings.uiLanguage);
     }
 
     statWords.textContent = (settings.stats?.wordsChecked || 0).toLocaleString();
@@ -94,7 +177,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   function renderDomains() {
     domainsList.innerHTML = '';
     if (!settings.ignoredDomains || settings.ignoredDomains.length === 0) {
-      domainsList.innerHTML = '<span style="color: #64748b; font-size: 11px;">No domains ignored</span>';
+      domainsList.innerHTML = `<span style="color: #64748b; font-size: 11px;">${t('ignored_domains_none', settings.uiLanguage)}</span>`;
       return;
     }
 
@@ -102,8 +185,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       const tag = document.createElement('div');
       tag.className = 'domain-tag';
       tag.innerHTML = `
-        <span>${domain}</span>
-        <span class="del-btn" data-domain="${domain}">&times;</span>
+        <span>${escapeHtml(domain)}</span>
+        <span class="del-btn" data-domain="${escapeHtml(domain)}">&times;</span>
       `;
 
       tag.querySelector('.del-btn')?.addEventListener('click', async () => {
@@ -120,7 +203,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (!wordsList) return;
     wordsList.innerHTML = '';
     if (!settings.ignoredWords || settings.ignoredWords.length === 0) {
-      wordsList.innerHTML = '<span style="color: #64748b; font-size: 11px;">No words ignored</span>';
+      wordsList.innerHTML = `<span style="color: #64748b; font-size: 11px;">${t('ignored_words_none', settings.uiLanguage)}</span>`;
       return;
     }
 
@@ -128,8 +211,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       const tag = document.createElement('div');
       tag.className = 'domain-tag';
       tag.innerHTML = `
-        <span>${word}</span>
-        <span class="del-btn" data-word="${word}">&times;</span>
+        <span>${escapeHtml(word)}</span>
+        <span class="del-btn" data-word="${escapeHtml(word)}">&times;</span>
       `;
 
       tag.querySelector('.del-btn')?.addEventListener('click', async () => {
@@ -158,7 +241,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   }
 
-  // Event Listeners
+  // Switch Event Listeners
   masterToggle.addEventListener('change', async () => {
     settings.enabled = masterToggle.checked;
     await saveSettings();
@@ -169,9 +252,28 @@ document.addEventListener('DOMContentLoaded', async () => {
     await saveSettings();
   });
 
+  autoPopupHighlightToggle.addEventListener('change', async () => {
+    settings.autoPopupOnHighlight = autoPopupHighlightToggle.checked;
+    await saveSettings();
+  });
+
+  autoPopupHoverToggle.addEventListener('change', async () => {
+    settings.autoPopupOnHover = autoPopupHoverToggle.checked;
+    await saveSettings();
+  });
+
+  // UI Language Switcher (dynamic runtime standard)
+  uiLanguageSelect.addEventListener('change', async () => {
+    settings.uiLanguage = uiLanguageSelect.value;
+    await saveSettings();
+    applyCurrentTranslations();
+    checkPlaygroundLive();
+  });
+
   languageSelect.addEventListener('change', async () => {
     settings.preferredLanguage = languageSelect.value;
     await saveSettings();
+    checkPlaygroundLive();
   });
 
   addDomainBtn.addEventListener('click', async () => {
@@ -206,34 +308,339 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   });
 
-  // Playground samples
+  // Playground sample cycling
   let sampleIndex = 0;
   const samples = [
     {
       text: 'This is a exampel of speling eror and bad grammer.',
-      label: 'Load Spanish sample'
+      labelKey: 'load_sample_es' as const
     },
     {
       text: 'yo tengo un perro amariyo y quiero comer una pome.',
-      label: 'Load German sample'
+      labelKey: 'load_sample_de' as const
     },
     {
       text: 'Ich habe ein feler gemacht und bin muede.',
-      label: 'Load French sample'
+      labelKey: 'load_sample_fr' as const
     },
     {
       text: 'Je suis alle au cinema et je mange une pome.',
-      label: 'Load English sample'
+      labelKey: 'load_sample_en' as const
     }
   ];
 
   loadSample.addEventListener('click', () => {
+    sampleIndex = (sampleIndex + 1) % samples.length;
     const sample = samples[sampleIndex];
     playgroundText.value = sample.text;
     playgroundText.dispatchEvent(new Event('input', { bubbles: true }));
-    sampleIndex = (sampleIndex + 1) % samples.length;
-    loadSample.textContent = samples[sampleIndex].label;
+    const nextIdx = (sampleIndex + 1) % samples.length;
+    loadSample.textContent = t(samples[nextIdx].labelKey, settings.uiLanguage);
   });
+
+  // ----------------------------------------------------
+  // Interactive Playground Live Engine with Floating Pill
+  // ----------------------------------------------------
+  KeepAliveManager.activate();
+
+  let playgroundDebounce: ReturnType<typeof setTimeout> | null = null;
+  let activeCorrections: GrammarCorrection[] = [];
+
+  function renderPlaygroundFixChips(corrections: GrammarCorrection[]): void {
+    if (!playgroundIssues) return;
+    playgroundIssues.innerHTML = '';
+
+    corrections.forEach((c) => {
+      const chip = document.createElement('div');
+      chip.className = 'fix-chip';
+      chip.title = `Click to replace "${c.original}" with "${c.corrected}"`;
+      chip.innerHTML = `
+        <svg class="fix-icon" viewBox="0 0 20 20" fill="currentColor" width="12" height="12">
+          <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+        </svg>
+        <span>${escapeHtml(c.original)}</span>
+        <span class="fix-arrow">→</span>
+        <span class="fix-target">${escapeHtml(c.corrected)}</span>
+      `;
+
+      chip.addEventListener('click', async () => {
+        applySingleCorrection(c);
+      });
+
+      playgroundIssues.appendChild(chip);
+    });
+  }
+
+  async function applySingleCorrection(c: GrammarCorrection): Promise<void> {
+    const val = playgroundText.value;
+    const regex = new RegExp(`\\b${escapeRegExp(c.original)}\\b`, 'i');
+    if (regex.test(val)) {
+      playgroundText.value = val.replace(regex, c.corrected);
+    } else {
+      playgroundText.value = val.replace(c.original, c.corrected);
+    }
+
+    // Record stat
+    await sendPopupMessage({ type: 'RECORD_STAT', stat: 'correctionsAccepted', count: 1 });
+    const currentCount = parseInt(statCorrections?.textContent?.replace(/,/g, '') || '0') + 1;
+    if (statCorrections) {
+      statCorrections.textContent = currentCount.toLocaleString();
+    }
+
+    checkPlaygroundLive();
+  }
+
+  function renderPlaygroundPopover(): void {
+    if (!playgroundPopoverBody) return;
+
+    if (activeCorrections.length === 0) {
+      playgroundPopoverBody.innerHTML = `
+        <div style="text-align: center; padding: 14px 10px; color: #94a3b8; font-size: 12px;">
+          <div style="font-size: 18px; margin-bottom: 4px;">✨</div>
+          <div style="color: #6ee7b7; font-weight: 600;">${t('playground_clean', settings.uiLanguage)}</div>
+          <div style="font-size: 11px; margin-top: 2px;">The text looks grammatically correct!</div>
+        </div>
+      `;
+      return;
+    }
+
+    const { correctedText, htmlHighlighted } = buildCorrectedSentence(
+      playgroundText.value,
+      activeCorrections
+    );
+
+    playgroundPopoverBody.innerHTML = `
+      <div class="playground-sentence-box">
+        <div style="font-size: 10px; color: #94a3b8; margin-bottom: 4px;">${t('showing_correction_for', settings.uiLanguage)}</div>
+        <div style="color: #f8fafc; font-size: 12px; margin-bottom: 8px;">${htmlHighlighted}</div>
+        <div class="popover-actions">
+          <button class="btn-apply-all" id="btnApplyAllPlayground">
+            ✓ ${t('btn_apply_correction', settings.uiLanguage)}
+          </button>
+        </div>
+      </div>
+      <div style="font-size: 10px; font-weight: 700; color: #94a3b8; text-transform: uppercase; margin-bottom: 6px;">
+        ${activeCorrections.length} ${t('playground_issues', settings.uiLanguage)}
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 5px; max-height: 120px; overflow-y: auto;">
+        ${activeCorrections
+          .map(
+            (c, idx) => `
+          <div style="display: flex; align-items: center; justify-content: space-between; background: rgba(255,255,255,0.04); padding: 4px 8px; border-radius: 6px;">
+            <span style="color: #fda4af; text-decoration: line-through; font-size: 11.5px;">${escapeHtml(c.original)}</span>
+            <span style="color: #64748b; font-size: 10px;">→</span>
+            <button class="btn-apply-all" style="padding: 2px 8px; font-size: 10.5px;" data-fix-index="${idx}">
+              ${escapeHtml(c.corrected)}
+            </button>
+          </div>
+        `
+          )
+          .join('')}
+      </div>
+    `;
+
+    // Apply full sentence button
+    const applyAllBtn = playgroundPopoverBody.querySelector('#btnApplyAllPlayground');
+    applyAllBtn?.addEventListener('click', async () => {
+      playgroundText.value = correctedText;
+      await sendPopupMessage({
+        type: 'RECORD_STAT',
+        stat: 'correctionsAccepted',
+        count: activeCorrections.length
+      });
+      playgroundPopover.style.display = 'none';
+      checkPlaygroundLive();
+    });
+
+    // Individual fix buttons
+    const itemFixBtns = playgroundPopoverBody.querySelectorAll('[data-fix-index]');
+    itemFixBtns.forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const idx = parseInt(btn.getAttribute('data-fix-index') || '0', 10);
+        const c = activeCorrections[idx];
+        if (c) {
+          applySingleCorrection(c);
+        }
+      });
+    });
+  }
+
+  async function checkPlaygroundLive(): Promise<void> {
+    const text = (playgroundText.value || '').trim();
+    if (!text || text.length < 2) {
+      if (playgroundIssues) playgroundIssues.innerHTML = '';
+      if (playgroundPill && playgroundPillText) {
+        playgroundPill.className = 'playground-floating-pill';
+        playgroundPillText.textContent = t('playground_ready', settings.uiLanguage);
+      }
+      return;
+    }
+
+    if (playgroundPill && playgroundPillText) {
+      playgroundPill.className = 'playground-floating-pill checking';
+      playgroundPillText.textContent = t('playground_checking', settings.uiLanguage);
+    }
+
+    try {
+      const resp = await sendPopupMessage<CheckTextResponse>({
+        type: 'CHECK_TEXT',
+        text: playgroundText.value,
+        language: settings.preferredLanguage || 'en'
+      });
+
+      if (!resp || resp.error) {
+        if (playgroundPill && playgroundPillText) {
+          playgroundPill.className = 'playground-floating-pill';
+          playgroundPillText.textContent = t('playground_ready', settings.uiLanguage);
+        }
+        return;
+      }
+
+      activeCorrections = resp.corrections || [];
+      const lang = (resp.detectedLanguage || settings.preferredLanguage || 'en').toUpperCase();
+
+      if (activeCorrections.length > 0) {
+        if (playgroundPill && playgroundPillText) {
+          playgroundPill.className = 'playground-floating-pill has-errors';
+          playgroundPillText.textContent = `✨ ${activeCorrections.length} ${t('playground_issues', settings.uiLanguage)} (${lang})`;
+        }
+        renderPlaygroundFixChips(activeCorrections);
+        if (playgroundPopover.style.display !== 'none') {
+          renderPlaygroundPopover();
+        }
+      } else {
+        if (playgroundPill && playgroundPillText) {
+          playgroundPill.className = 'playground-floating-pill clean';
+          playgroundPillText.textContent = `✓ ${t('playground_clean', settings.uiLanguage)} (${lang})`;
+        }
+        if (playgroundIssues) {
+          playgroundIssues.innerHTML = `<span style="color: #6ee7b7; font-size: 11px; padding: 2px 0;">✓ ${t('playground_clean', settings.uiLanguage)}</span>`;
+        }
+        if (playgroundPopover.style.display !== 'none') {
+          renderPlaygroundPopover();
+        }
+      }
+    } catch {
+      if (playgroundPill && playgroundPillText) {
+        playgroundPill.className = 'playground-floating-pill';
+        playgroundPillText.textContent = t('playground_ready', settings.uiLanguage);
+      }
+    }
+  }
+
+  // Pill click toggles in-place popover list
+  playgroundPill.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (playgroundPopover.style.display === 'none') {
+      renderPlaygroundPopover();
+      playgroundPopover.style.display = 'block';
+    } else {
+      playgroundPopover.style.display = 'none';
+    }
+  });
+
+  playgroundPopoverClose.addEventListener('click', () => {
+    playgroundPopover.style.display = 'none';
+  });
+
+  document.addEventListener('click', (e) => {
+    if (!playgroundPopover.contains(e.target as Node) && e.target !== playgroundPill && !playgroundPill.contains(e.target as Node)) {
+      playgroundPopover.style.display = 'none';
+    }
+  });
+
+  // Textarea selection watcher for instant synonyms & definitions
+  async function handlePlaygroundSelection(): Promise<void> {
+    const start = playgroundText.selectionStart;
+    const end = playgroundText.selectionEnd;
+    if (start === null || end === null || end <= start) return;
+
+    const selected = playgroundText.value.substring(start, end).trim();
+    if (!selected || selected.split(/\s+/).length > 2) return;
+
+    try {
+      const resp = await sendPopupMessage<SynonymsResponse>({
+        type: 'GET_SYNONYMS',
+        word: selected,
+        language: settings.preferredLanguage || 'en'
+      });
+
+      if (!resp || !playgroundIssues) return;
+
+      // If synonyms found, display synonym chips
+      if (resp.synonyms && resp.synonyms.length > 0) {
+        playgroundIssues.innerHTML = '';
+        const title = document.createElement('div');
+        title.style.width = '100%';
+        title.style.fontSize = '11px';
+        title.style.color = '#a5b4fc';
+        title.style.marginBottom = '2px';
+        title.textContent = `${t('tab_synonyms', settings.uiLanguage)}: "${escapeHtml(selected)}" (click to replace):`;
+        playgroundIssues.appendChild(title);
+
+        for (const group of resp.synonyms) {
+          for (const term of group.terms.slice(0, 5)) {
+            const synChip = document.createElement('div');
+            synChip.className = 'synonym-chip';
+            synChip.innerHTML = `<span>${escapeHtml(term)}</span><span class="syn-badge">${escapeHtml(group.pos)}</span>`;
+            synChip.addEventListener('click', () => {
+              playgroundText.setRangeText(term, start, end, 'end');
+              checkPlaygroundLive();
+            });
+            playgroundIssues.appendChild(synChip);
+          }
+        }
+        return;
+      }
+
+      // If no synonyms, but definitions found, display definition card!
+      if (resp.definitions && resp.definitions.length > 0) {
+        playgroundIssues.innerHTML = '';
+        const defWrap = document.createElement('div');
+        defWrap.style.width = '100%';
+        defWrap.style.background = 'rgba(15, 23, 42, 0.85)';
+        defWrap.style.border = '1px solid rgba(56, 189, 248, 0.3)';
+        defWrap.style.borderRadius = '6px';
+        defWrap.style.padding = '6px 8px';
+        defWrap.style.fontSize = '11px';
+
+        const defTitle = document.createElement('div');
+        defTitle.style.color = '#38bdf8';
+        defTitle.style.fontWeight = '600';
+        defTitle.style.marginBottom = '3px';
+        defTitle.textContent = `${t('no_synonyms_show_def', settings.uiLanguage)} "${selected}"`;
+        defWrap.appendChild(defTitle);
+
+        for (const def of resp.definitions.slice(0, 2)) {
+          const entry = document.createElement('div');
+          entry.style.color = '#e2e8f0';
+          entry.style.marginTop = '3px';
+          entry.innerHTML = `<b style="color: #818cf8; text-transform: uppercase; font-size: 9.5px;">[${escapeHtml(def.pos)}]</b> ${escapeHtml(def.gloss)}`;
+          defWrap.appendChild(entry);
+        }
+
+        playgroundIssues.appendChild(defWrap);
+      }
+    } catch {}
+  }
+
+  playgroundText.addEventListener('input', () => {
+    if (playgroundDebounce) clearTimeout(playgroundDebounce);
+    playgroundDebounce = setTimeout(() => checkPlaygroundLive(), 350);
+  });
+
+  playgroundText.addEventListener('mouseup', () => {
+    setTimeout(handlePlaygroundSelection, 60);
+  });
+
+  playgroundText.addEventListener('keyup', (e) => {
+    if (e.key === 'Shift' || e.key.startsWith('Arrow')) {
+      setTimeout(handlePlaygroundSelection, 60);
+    }
+  });
+
+  // Run initial check on popup open
+  setTimeout(() => checkPlaygroundLive(), 100);
 
   updateUI();
 });
