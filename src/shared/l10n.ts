@@ -76,7 +76,10 @@ export type TranslationKey =
   | 'btn_apply_correction'
   | 'no_synonyms_show_def'
   | 'no_definitions_found'
-  | 'showing_correction_for';
+  | 'showing_correction_for'
+  | 'intended_language'
+  | 'inferred_from_context'
+  | 'checking_in_language';
 
 export const TRANSLATIONS: Record<string, Record<TranslationKey, string>> = {
   en: {
@@ -132,7 +135,10 @@ export const TRANSLATIONS: Record<string, Record<TranslationKey, string>> = {
     btn_apply_correction: 'Apply Correction',
     no_synonyms_show_def: 'No synonyms found — showing definition:',
     no_definitions_found: 'No definition available for this term.',
-    showing_correction_for: 'Showing correction for:'
+    showing_correction_for: 'Showing correction for:',
+    intended_language: 'Language:',
+    inferred_from_context: 'Inferred from context',
+    checking_in_language: 'Checking spelling & grammar...'
   },
   es: {
     app_name: 'PolyglotGrammar',
@@ -187,7 +193,10 @@ export const TRANSLATIONS: Record<string, Record<TranslationKey, string>> = {
     btn_apply_correction: 'Aplicar corrección',
     no_synonyms_show_def: 'Sinónimos no encontrados — mostrando definición:',
     no_definitions_found: 'No hay definición disponible para este término.',
-    showing_correction_for: 'Mostrando corrección para:'
+    showing_correction_for: 'Mostrando corrección para:',
+    intended_language: 'Idioma:',
+    inferred_from_context: 'Inferido del contexto',
+    checking_in_language: 'Comprobando ortografía y gramática...'
   },
   fr: {
     app_name: 'PolyglotGrammar',
@@ -242,7 +251,10 @@ export const TRANSLATIONS: Record<string, Record<TranslationKey, string>> = {
     btn_apply_correction: 'Appliquer la correction',
     no_synonyms_show_def: 'Aucun synonyme trouvé — affichage de la définition :',
     no_definitions_found: 'Aucune définition disponible pour ce terme.',
-    showing_correction_for: 'Correction suggérée pour :'
+    showing_correction_for: 'Correction suggérée pour :',
+    intended_language: 'Langue :',
+    inferred_from_context: 'Déduit du contexte',
+    checking_in_language: "Vérification de l'orthographe et de la grammaire..."
   },
   de: {
     app_name: 'PolyglotGrammar',
@@ -297,7 +309,10 @@ export const TRANSLATIONS: Record<string, Record<TranslationKey, string>> = {
     btn_apply_correction: 'Korrektur anwenden',
     no_synonyms_show_def: 'Keine Synonyme gefunden — Definition wird angezeigt:',
     no_definitions_found: 'Keine Definition für diesen Begriff verfügbar.',
-    showing_correction_for: 'Korrekturvorschlag für:'
+    showing_correction_for: 'Korrekturvorschlag für:',
+    intended_language: 'Sprache:',
+    inferred_from_context: 'Aus dem Kontext abgeleitet',
+    checking_in_language: 'Rechtschreibung & Grammatik prüfen...'
   },
   it: {
     app_name: 'PolyglotGrammar',
@@ -352,7 +367,10 @@ export const TRANSLATIONS: Record<string, Record<TranslationKey, string>> = {
     btn_apply_correction: 'Applica correzione',
     no_synonyms_show_def: 'Nessun sinonimo trovato — visualizzazione definizione:',
     no_definitions_found: 'Nessuna definizione disponibile per questo termine.',
-    showing_correction_for: 'Correzione per:'
+    showing_correction_for: 'Correzione per:',
+    intended_language: 'Lingua:',
+    inferred_from_context: 'Dedotto dal contesto',
+    checking_in_language: 'Controllo ortografia e grammatica...'
   },
   pt: {
     app_name: 'PolyglotGrammar',
@@ -407,7 +425,10 @@ export const TRANSLATIONS: Record<string, Record<TranslationKey, string>> = {
     btn_apply_correction: 'Aplicar correção',
     no_synonyms_show_def: 'Nenhum sinônimo encontrado — exibindo definição:',
     no_definitions_found: 'Nenhuma definição disponível para este termo.',
-    showing_correction_for: 'Mostrando correção para:'
+    showing_correction_for: 'Mostrando correção para:',
+    intended_language: 'Idioma:',
+    inferred_from_context: 'Inferido do contexto',
+    checking_in_language: 'Verificando ortografia e gramática...'
   },
   ru: {
     app_name: 'PolyglotGrammar',
@@ -462,7 +483,10 @@ export const TRANSLATIONS: Record<string, Record<TranslationKey, string>> = {
     btn_apply_correction: 'Применить исправление',
     no_synonyms_show_def: 'Синонимы не найдены — показ определения:',
     no_definitions_found: 'Определение для этого слова не найдено.',
-    showing_correction_for: 'Исправление для:'
+    showing_correction_for: 'Исправление для:',
+    intended_language: 'Язык:',
+    inferred_from_context: 'Определено по контексту',
+    checking_in_language: 'Проверка орфографии и грамматики...'
   },
   ja: {
     app_name: 'PolyglotGrammar',
@@ -517,7 +541,10 @@ export const TRANSLATIONS: Record<string, Record<TranslationKey, string>> = {
     btn_apply_correction: '修正を適用',
     no_synonyms_show_def: '類語が見つかりません — 単語の定義を表示:',
     no_definitions_found: 'この単語の定義はありません。',
-    showing_correction_for: '修正候補:'
+    showing_correction_for: '修正候補:',
+    intended_language: '判定言語:',
+    inferred_from_context: '前後の文脈から推定',
+    checking_in_language: 'スペルと文法をチェック中...'
   },
   zh: {
     app_name: 'PolyglotGrammar',
@@ -572,7 +599,10 @@ export const TRANSLATIONS: Record<string, Record<TranslationKey, string>> = {
     btn_apply_correction: '应用修正',
     no_synonyms_show_def: '未找到同义词 — 显示英文释义：',
     no_definitions_found: '暂无此词条释义。',
-    showing_correction_for: '建议修正：'
+    showing_correction_for: '建议修正：',
+    intended_language: '目标语言:',
+    inferred_from_context: '根据上下文智能推断',
+    checking_in_language: '正在检查拼写与语法...'
   },
   ar: {
     app_name: 'PolyglotGrammar',
@@ -627,7 +657,10 @@ export const TRANSLATIONS: Record<string, Record<TranslationKey, string>> = {
     btn_apply_correction: 'تطبيق التصحيح',
     no_synonyms_show_def: 'لم يتم العثور على مرادفات — عرض المعنى:',
     no_definitions_found: 'لا يتوفر تعريف لهذه الكلمة.',
-    showing_correction_for: 'تصحيح مقترح لـ:'
+    showing_correction_for: 'تصحيح مقترح لـ:',
+    intended_language: 'اللغة المفترضة:',
+    inferred_from_context: 'مستنتجة من سياق الكلمات السابقة',
+    checking_in_language: 'جاري التحقق من الإملاء والقواعد...'
   }
 };
 

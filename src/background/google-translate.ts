@@ -371,19 +371,40 @@ export class GoogleTranslateService {
   }
 
   /**
+   * Fast language detection for context / text
+   */
+  public static async detectLanguage(text: string): Promise<string> {
+    const trimmed = text.trim();
+    if (!trimmed || trimmed.length < 2) return 'en';
+    const encoded = encodeURIComponent(trimmed.slice(0, 300));
+    try {
+      const data = await this.requestWithFallback(
+        (ep) => `${ep}&sl=auto&tl=en&dt=t&q=${encoded}`
+      );
+      if (data && data[2]) {
+        return String(data[2]);
+      }
+    } catch {
+      // Fallback
+    }
+    return 'en';
+  }
+
+  /**
    * Get query correction for a single word in isolation
    */
-  public static async getStandaloneCorrection(word: string): Promise<string | null> {
+  public static async getStandaloneCorrection(word: string, lang: string = 'en'): Promise<string | null> {
     const clean = cleanWord(word);
     if (!clean || clean.length < 2) return null;
-    const cacheKey = clean.toLowerCase();
+    const cacheKey = `${lang}:${clean.toLowerCase()}`;
     if (this.standaloneQcCache.has(cacheKey)) {
       return this.standaloneQcCache.get(cacheKey)!;
     }
 
+    const altTarget = lang === 'en' ? 'es' : 'en';
     try {
       const data = await this.requestWithFallback(
-        (ep) => `${ep}&sl=auto&tl=es&dt=t&dt=qc&dt=bd&q=${encodeURIComponent(clean)}`
+        (ep) => `${ep}&sl=${lang}&tl=${altTarget}&dt=t&dt=qc&dt=bd&q=${encodeURIComponent(clean)}`
       );
       const qc = data && data[7];
       if (qc && Array.isArray(qc) && typeof qc[0] === 'string') {
@@ -414,7 +435,7 @@ export class GoogleTranslateService {
         try {
           const isCorrectedInDict = await this.isDictionaryWord(c.corrected, detectedLang);
           if (!isCorrectedInDict) {
-            const standaloneSugg = await this.getStandaloneCorrection(c.original);
+            const standaloneSugg = await this.getStandaloneCorrection(c.original, detectedLang);
             if (
               standaloneSugg &&
               standaloneSugg.toLowerCase() !== c.original.toLowerCase() &&
@@ -437,35 +458,41 @@ export class GoogleTranslateService {
   }
 
   /**
-   * Grammar and spell checking
+   * Grammar and spell checking with intended/source language support
    */
   public static async checkText(
     text: string,
-    targetLangFallback: string = 'es'
+    targetLangFallback: string = 'es',
+    sourceLang?: string
   ): Promise<{ corrections: GrammarCorrection[]; detectedLanguage: string }> {
     const trimmed = text.trim();
     if (!trimmed || trimmed.length < 2) {
-      return { corrections: [], detectedLanguage: 'auto' };
+      return { corrections: [], detectedLanguage: sourceLang || 'auto' };
     }
 
     // Google Translate query correction works best when target language is different from source
-    // By default sl=auto, and we request qc (query correction), t (translation), and bd (dictionary)
+    // When sourceLang is specified (e.g. 'en'), use sl=en to prevent false language detection
+    const srcLang = sourceLang && sourceLang !== 'auto' ? sourceLang : 'auto';
+    let targetLang = targetLangFallback;
+    if (srcLang !== 'auto' && targetLang === srcLang) {
+      targetLang = srcLang === 'en' ? 'es' : 'en';
+    }
     const encoded = encodeURIComponent(text);
 
     try {
       const data = await this.requestWithFallback(
-        (ep) => `${ep}&sl=auto&tl=${targetLangFallback}&dt=t&dt=qc&dt=bd&q=${encoded}`
+        (ep) => `${ep}&sl=${srcLang}&tl=${targetLang}&dt=t&dt=qc&dt=bd&q=${encoded}`
       );
 
-      const detectedLang = data && data[2] ? String(data[2]) : 'en';
+      const detectedLang = srcLang !== 'auto' ? srcLang : (data && data[2] ? String(data[2]) : 'en');
 
-      // If detected language happens to match targetLangFallback, do a second query with 'en' (or 'es')
+      // If detected language happens to match targetLang, do a second query with 'en' (or 'es')
       let qcData = data && data[7];
-      if (!qcData && detectedLang === targetLangFallback) {
-        const altTarget = targetLangFallback === 'en' ? 'es' : 'en';
+      if (!qcData && detectedLang === targetLang) {
+        const altTarget = targetLang === 'en' ? 'es' : 'en';
         try {
           const retryData = await this.requestWithFallback(
-            (ep) => `${ep}&sl=auto&tl=${altTarget}&dt=t&dt=qc&q=${encoded}`
+            (ep) => `${ep}&sl=${srcLang}&tl=${altTarget}&dt=t&dt=qc&q=${encoded}`
           );
           if (retryData && retryData[7]) {
             qcData = retryData[7];
@@ -493,7 +520,7 @@ export class GoogleTranslateService {
       };
     } catch (err) {
       // User rule: If an API request fails or is throttled, silently back off without blocking user typing
-      return { corrections: [], detectedLanguage: 'auto' };
+      return { corrections: [], detectedLanguage: sourceLang || 'auto' };
     }
   }
 

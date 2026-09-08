@@ -212,6 +212,61 @@ export class ShadowRootHost {
         pointer-events: none;
       }
 
+      /* Intended Language Selector in Fixes UI */
+      .polyglot-intended-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        margin-bottom: 10px;
+        padding: 5px 8px;
+        background: rgba(2, 6, 23, 0.45);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 7px;
+      }
+
+      .polyglot-intended-label-wrap {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .polyglot-intended-label {
+        font-size: 11px;
+        font-weight: 600;
+        color: #94a3b8;
+      }
+
+      .polyglot-inferred-badge {
+        font-size: 9.5px;
+        font-weight: 600;
+        color: #38bdf8;
+        background: rgba(56, 189, 248, 0.15);
+        border: 1px solid rgba(56, 189, 248, 0.3);
+        padding: 1px 5px;
+        border-radius: 4px;
+        display: inline-flex;
+        align-items: center;
+        gap: 2px;
+      }
+
+      .polyglot-intended-select {
+        flex: 1;
+        max-width: 150px;
+        background: rgba(15, 23, 42, 0.9);
+        border: 1px solid rgba(255, 255, 255, 0.16);
+        border-radius: 5px;
+        color: #f1f5f9;
+        padding: 3px 6px;
+        font-size: 11px;
+        outline: none;
+        cursor: pointer;
+      }
+
+      .polyglot-intended-select:focus {
+        border-color: #6366f1;
+      }
+
       /* Google Translate Style Sentence & Word Corrections */
       .polyglot-sentence-correction {
         background: rgba(2, 6, 23, 0.65);

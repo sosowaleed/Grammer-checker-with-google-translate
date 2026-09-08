@@ -227,14 +227,33 @@ async function handleMessage(message: ExtensionMessage, sender: any): Promise<an
         return { corrections: [], detectedLanguage: 'en' } as CheckTextResponse;
       }
 
-      // Dynamic language target:
-      // When text is in English, cross-translating to 'es' triggers Google's query correction (dt=qc).
-      // When text is non-English, cross-translating to 'en' triggers Google's query correction (dt=qc).
-      // If language was explicitly passed, respect it, otherwise default to smart cross-language pair.
-      const currentTarget = message.language || settings.preferredLanguage || 'en';
-      const fallbackTarget = currentTarget === 'en' ? 'es' : 'en';
+      // Determine intended language:
+      // 1. Explicitly selected intendedLanguage
+      // 2. Infer from previous words (contextBefore)
+      // 3. Default to user's preferred language (default 'en')
+      let intendedLang = message.intendedLanguage;
+      let inferredFromContext = false;
+
+      if (!intendedLang || intendedLang === 'auto') {
+        const context = (message.contextBefore || '').trim();
+        if (context.length >= 2) {
+          try {
+            const detectedContextLang = await GoogleTranslateService.detectLanguage(context);
+            if (detectedContextLang && detectedContextLang !== 'auto') {
+              intendedLang = detectedContextLang;
+              inferredFromContext = true;
+            }
+          } catch {}
+        }
+      }
+
+      if (!intendedLang || intendedLang === 'auto') {
+        intendedLang = settings.preferredLanguage || 'en';
+      }
+
+      const fallbackTarget = intendedLang === 'en' ? 'es' : 'en';
       const ignoredSet = new Set((settings.ignoredWords || []).map((w) => w.trim().toLowerCase()));
-      const cacheKey = `${text.trim()}:${currentTarget}:${fallbackTarget}:${settings.ignoredWords?.join(',')}`;
+      const cacheKey = `${text.trim()}:${intendedLang}:${fallbackTarget}:${settings.ignoredWords?.join(',')}`;
 
       // Check LRU Cache first
       const cached = textCheckCache.get(cacheKey);
@@ -243,13 +262,13 @@ async function handleMessage(message: ExtensionMessage, sender: any): Promise<an
       }
 
       try {
-        let result = await GoogleTranslateService.checkText(text, fallbackTarget);
+        let result = await GoogleTranslateService.checkText(text, fallbackTarget, intendedLang);
 
         // Fallback retry with opposite language if 0 corrections found
         if (result.corrections.length === 0) {
           const altTarget = fallbackTarget === 'en' ? 'es' : 'en';
           try {
-            const altResult = await GoogleTranslateService.checkText(text, altTarget);
+            const altResult = await GoogleTranslateService.checkText(text, altTarget, intendedLang);
             if (altResult.corrections.length > 0) {
               result = altResult;
             }
@@ -263,7 +282,9 @@ async function handleMessage(message: ExtensionMessage, sender: any): Promise<an
 
         const response: CheckTextResponse = {
           corrections: filteredCorrections,
-          detectedLanguage: result.detectedLanguage
+          detectedLanguage: result.detectedLanguage,
+          intendedLanguage: intendedLang,
+          inferredFromContext
         };
         textCheckCache.set(cacheKey, response);
 
@@ -275,10 +296,16 @@ async function handleMessage(message: ExtensionMessage, sender: any): Promise<an
       } catch (err: any) {
         return {
           corrections: [],
-          detectedLanguage: 'en',
+          detectedLanguage: intendedLang || 'en',
+          intendedLanguage: intendedLang,
           error: err?.message || 'Check failed'
         } as CheckTextResponse;
       }
+    }
+
+    case 'DETECT_LANGUAGE': {
+      const detected = await GoogleTranslateService.detectLanguage(message.text || '');
+      return { detectedLanguage: detected };
     }
 
     case 'GET_SYNONYMS': {

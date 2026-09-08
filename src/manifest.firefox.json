@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "PolyglotGrammar - Grammar & Spell Checker",
   "short_name": "PolyglotGrammar",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "description": "Real-time spelling/grammar correction as you type, contextual synonyms, and instant translation across 130+ languages powered by Google Translate.",
   "permissions": [
     "storage",

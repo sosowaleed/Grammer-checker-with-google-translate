@@ -5,7 +5,7 @@ import path from 'path';
 const rootDir = path.resolve('.');
 const distDir = path.resolve('dist');
 const pkg = JSON.parse(fs.readFileSync(path.join(rootDir, 'package.json'), 'utf-8'));
-const version = pkg.version || '1.0.7';
+const version = pkg.version || '1.0.8';
 
 const sourceZip = path.join(distDir, `polyglot-grammar-source-v${version}.zip`);
 const stagingDir = path.join(distDir, '.source-staging');

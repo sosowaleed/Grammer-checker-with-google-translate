@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "PolyglotGrammar: Multilingual Grammar & Synonym Explorer",
   "short_name": "PolyglotGrammar",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "description": "Real-time multilingual grammar proofreading, contextual synonyms explorer, and instant translation powered by Google Translate.",
   "permissions": [
     "storage",

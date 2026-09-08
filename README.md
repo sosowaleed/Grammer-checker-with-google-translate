@@ -2,7 +2,7 @@
 
 > **Manifest V3 Cross-Browser Extension** for real-time grammar checking as you type, contextual synonym exploration on highlighted words, dictionary definitions, and instant multilingual translation across 130+ languages powered by Google Translate.
 
-[![Version](https://img.shields.io/badge/version-1.0.7-6366f1.svg)](package.json)
+[![Version](https://img.shields.io/badge/version-1.0.8-6366f1.svg)](package.json)
 [![Manifest V3](https://img.shields.io/badge/Manifest-V3-6366f1.svg)](https://developer.chrome.com/docs/extensions/mv3/intro/)
 [![Chrome](https://img.shields.io/badge/Browser-Chrome-4285F4.svg)](https://www.google.com/chrome/)
 [![Firefox](https://img.shields.io/badge/Browser-Firefox-FF7139.svg)](https://www.mozilla.org/firefox/)
@@ -113,8 +113,8 @@ The output will be generated in `dist/chrome` and `dist/firefox`.
 npm run pack
 ```
 This generates:
-- `dist/polyglot-grammar-chrome-v1.0.7.zip` (ready for Chrome Web Store)
-- `dist/polyglot-grammar-firefox-v1.0.7.zip` (ready for Firefox Add-ons AMO)
+- `dist/polyglot-grammar-chrome-v1.0.8.zip` (ready for Chrome Web Store)
+- `dist/polyglot-grammar-firefox-v1.0.8.zip` (ready for Firefox Add-ons AMO)
 
 ---
 
@@ -145,7 +145,7 @@ This generates:
 
 #### Method 2: Permanent XPI Installation
 1. Run `npm run pack`.
-2. In Firefox Developer Edition / Nightly with `xpinstall.signatures.required = false` in `about:config`, drag and drop `dist/polyglot-grammar-firefox-v1.0.7.zip` (or renamed to `.xpi`) directly into Firefox.
+2. In Firefox Developer Edition / Nightly with `xpinstall.signatures.required = false` in `about:config`, drag and drop `dist/polyglot-grammar-firefox-v1.0.8.zip` (or renamed to `.xpi`) directly into Firefox.
 
 ---
 
@@ -154,18 +154,18 @@ This generates:
 Releasing and maintaining extensions across Chrome and Firefox follows standard WebExtension distribution lifecycles:
 
 ### 1. Chrome Web Store (CWS)
-- **Submission**: Upload `dist/polyglot-grammar-chrome-v1.0.7.zip` via the [Chrome Developer Dashboard](https://chrome.google.com/webstore/devconsole).
+- **Submission**: Upload `dist/polyglot-grammar-chrome-v1.0.8.zip` via the [Chrome Developer Dashboard](https://chrome.google.com/webstore/devconsole).
 - **Review**: Automated security scanners and human reviewers verify permissions and code compliance (typically takes between a few hours to 3 business days).
 - **Auto-Update Mechanism**: Once approved, Google's update servers automatically push updates to all active users. Chrome checks for updates automatically every few hours (or users can click "Update" in `chrome://extensions/`).
 - **Zero Data Loss**: Updates overwrite code files while preserving the user's `chrome.storage.local` settings, stats, and custom ignored words.
 
 ### 2. Firefox Add-ons (AMO - addons.mozilla.org)
-- **Submission**: Submit `dist/polyglot-grammar-firefox-v1.0.7.zip` to the [Mozilla Add-on Developer Hub](https://addons.mozilla.org/developers/).
+- **Submission**: Submit `dist/polyglot-grammar-firefox-v1.0.8.zip` to the [Mozilla Add-on Developer Hub](https://addons.mozilla.org/developers/).
 - **Review**: AMO automated validator checks the package; manual review applies if sensitive permissions or complex bundles are flagged.
 - **Auto-Update Mechanism**: Firefox queries the AMO update manifest every 24 hours. When a new signed version is detected, Firefox silently downloads and applies the update in the background.
 
 ### 3. GitHub Releases / Self-Hosted
-- For users loading unpacked or installing from GitHub releases, bump the version in `package.json`, `src/manifest.chrome.json`, and `src/manifest.firefox.json` (e.g., `1.0.7` → `1.0.8`).
+- For users loading unpacked or installing from GitHub releases, bump the version in `package.json`, `src/manifest.chrome.json`, and `src/manifest.firefox.json` (e.g., `1.0.8` → `1.0.9`).
 - Run `npm run build && npm run pack` and attach the output zip files to the GitHub Release.
 - Users downloading the updated zip simply replace the folder in developer mode or click "Reload" on the extension card in `chrome://extensions/`.
 

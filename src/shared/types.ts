@@ -64,7 +64,14 @@ export const DEFAULT_SETTINGS: UserSettings = {
 
 // Message Actions
 export type ExtensionMessage =
-  | { type: 'CHECK_TEXT'; text: string; language?: string }
+  | {
+      type: 'CHECK_TEXT';
+      text: string;
+      language?: string;
+      intendedLanguage?: string;
+      contextBefore?: string;
+    }
+  | { type: 'DETECT_LANGUAGE'; text: string }
   | { type: 'GET_SYNONYMS'; word: string; language?: string }
   | { type: 'TRANSLATE_TEXT'; text: string; targetLang: string; sourceLang?: string }
   | { type: 'GET_SETTINGS' }
@@ -78,6 +85,8 @@ export type ExtensionMessage =
 export type CheckTextResponse = {
   corrections: GrammarCorrection[];
   detectedLanguage: string;
+  intendedLanguage?: string;
+  inferredFromContext?: boolean;
   error?: string;
 };
 

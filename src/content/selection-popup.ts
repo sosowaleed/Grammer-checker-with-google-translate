@@ -61,6 +61,23 @@ export function buildCorrectedSentence(
   return { correctedText, htmlHighlighted };
 }
 
+function extractContextBeforeRange(range: Range): string {
+  let context = '';
+  const node = range.startContainer;
+  if (node.nodeType === Node.TEXT_NODE) {
+    context = node.textContent?.substring(0, range.startOffset) || '';
+  }
+  if (context.trim().length < 4 && node.parentElement) {
+    const parentText = node.parentElement.textContent || '';
+    const selText = range.toString();
+    const idx = parentText.indexOf(selText);
+    if (idx > 0) {
+      context = parentText.substring(0, idx);
+    }
+  }
+  return context.trim();
+}
+
 export class SelectionPopup {
   private static activePopup: HTMLElement | null = null;
   private static floatingPill: HTMLElement | null = null;
@@ -72,10 +89,14 @@ export class SelectionPopup {
     start: number;
     end: number;
   } | null = null;
+  private static currentContextBefore: string = '';
+  private static currentIntendedLang: string = '';
   private static cachedCorrections: {
     text: string;
     corrections: GrammarCorrection[];
     detectedLanguage: string;
+    intendedLanguage?: string;
+    inferredFromContext?: boolean;
   } | null = null;
 
   public static handleInputSelection(
@@ -98,6 +119,10 @@ export class SelectionPopup {
 
     this.savedInputTarget = { element: input, start: actualStart, end: actualEnd };
     this.savedRange = null;
+
+    // Capture context before current selection in form input
+    this.currentContextBefore = input.value.substring(0, actualStart).trim();
+    this.currentIntendedLang = '';
 
     const inputRect = input.getBoundingClientRect();
     const computed = window.getComputedStyle(input);
@@ -140,6 +165,10 @@ export class SelectionPopup {
 
     const range = selection.getRangeAt(0);
     this.savedRange = range.cloneRange();
+
+    // Capture context before current selection in page/contenteditable
+    this.currentContextBefore = extractContextBeforeRange(range);
+    this.currentIntendedLang = '';
 
     const rect = range.getBoundingClientRect();
     if (rect.width === 0 && rect.height === 0) {
@@ -197,18 +226,24 @@ export class SelectionPopup {
     pillSpan.textContent = isSingleWord ? 'Synonyms & Translate' : 'Translate';
     pill.append(svg, pillSpan);
 
-    // Immediately check text for spelling/grammar so pill and card are dynamic
+    // Immediately check text for spelling/grammar with inferred context
     sendRuntimeMessage<CheckTextResponse>({
       type: 'CHECK_TEXT',
-      text
+      text,
+      contextBefore: this.currentContextBefore
     })
       .then((res) => {
         if (res && Array.isArray(res.corrections) && res.corrections.length > 0) {
           this.cachedCorrections = {
             text,
             corrections: res.corrections,
-            detectedLanguage: res.detectedLanguage || 'en'
+            detectedLanguage: res.detectedLanguage || 'en',
+            intendedLanguage: res.intendedLanguage,
+            inferredFromContext: res.inferredFromContext
           };
+          if (res.intendedLanguage) {
+            this.currentIntendedLang = res.intendedLanguage;
+          }
           if (this.floatingPill === pill) {
             pill.classList.add('has-fixes');
             const count = res.corrections.length;
@@ -439,17 +474,20 @@ export class SelectionPopup {
     this.attachOutsideDismiss();
   }
 
-  private static renderLanguageOptions(): string {
-    let html = '<optgroup label="Popular Languages">';
+  private static renderLanguageOptions(selectedCode: string = 'en'): string {
+    let html = '';
+    html += '<optgroup label="Popular Languages">';
     for (const code of POPULAR_LANGUAGES) {
       const lang = SUPPORTED_LANGUAGES.find((l) => l.code === code);
       if (lang) {
-        html += `<option value="${lang.code}">${lang.name} (${lang.nativeName})</option>`;
+        const isSelected = lang.code === selectedCode ? 'selected' : '';
+        html += `<option value="${lang.code}" ${isSelected}>${lang.name} (${lang.nativeName})</option>`;
       }
     }
     html += '</optgroup><optgroup label="All Languages">';
     for (const lang of SUPPORTED_LANGUAGES) {
-      html += `<option value="${lang.code}">${lang.name}</option>`;
+      const isSelected = lang.code === selectedCode ? 'selected' : '';
+      html += `<option value="${lang.code}" ${isSelected}>${lang.name}</option>`;
     }
     html += '</optgroup>';
     return html;
@@ -459,23 +497,35 @@ export class SelectionPopup {
     text: string,
     popup: HTMLElement,
     isSingleWord: boolean = false,
-    onAutoSwitchToSynonyms?: () => void
+    onAutoSwitchToSynonyms?: () => void,
+    intendedLangOverride?: string
   ): Promise<void> {
     const fixesContainer = popup.querySelector('#fixes-content') as HTMLElement;
     const badgeFixes = popup.querySelector('#polyglot-tab-badge-fixes') as HTMLElement;
     const langTag = popup.querySelector('#polyglot-card-lang') as HTMLElement;
     if (!fixesContainer) return;
 
+    if (intendedLangOverride) {
+      this.currentIntendedLang = intendedLangOverride;
+      this.cachedCorrections = null;
+    }
+
     let corrections: GrammarCorrection[] = [];
     let detectedLang = 'en';
+    let intendedLang = this.currentIntendedLang;
+    let inferredFromContext = false;
 
     if (
+      !intendedLangOverride &&
       this.cachedCorrections &&
       this.cachedCorrections.text === text &&
+      (!this.currentIntendedLang || this.cachedCorrections.intendedLanguage === this.currentIntendedLang) &&
       Array.isArray(this.cachedCorrections.corrections)
     ) {
       corrections = this.cachedCorrections.corrections;
       detectedLang = this.cachedCorrections.detectedLanguage || 'en';
+      intendedLang = this.cachedCorrections.intendedLanguage || detectedLang;
+      inferredFromContext = Boolean(this.cachedCorrections.inferredFromContext);
     } else {
       setElementHtml(
         fixesContainer,
@@ -490,25 +540,34 @@ export class SelectionPopup {
       try {
         const response = await sendRuntimeMessage<CheckTextResponse>({
           type: 'CHECK_TEXT',
-          text
+          text,
+          intendedLanguage: this.currentIntendedLang || undefined,
+          contextBefore: this.currentContextBefore
         });
 
         if (response && Array.isArray(response.corrections)) {
           corrections = response.corrections;
           detectedLang = response.detectedLanguage || 'en';
+          intendedLang = response.intendedLanguage || detectedLang;
+          inferredFromContext = Boolean(response.inferredFromContext);
           this.cachedCorrections = {
             text,
             corrections,
-            detectedLanguage: detectedLang
+            detectedLanguage: detectedLang,
+            intendedLanguage: intendedLang,
+            inferredFromContext
           };
+          this.currentIntendedLang = intendedLang;
         }
       } catch {
         // failed lookup
       }
     }
 
+    const activeLang = intendedLang || detectedLang || 'en';
+
     if (langTag) {
-      langTag.textContent = getLanguageName(detectedLang);
+      langTag.textContent = getLanguageName(activeLang);
     }
 
     if (badgeFixes) {
@@ -521,10 +580,27 @@ export class SelectionPopup {
     }
 
     // Auto-switch to synonyms for single words that have NO spelling errors
-    if (corrections.length === 0 && isSingleWord && onAutoSwitchToSynonyms) {
+    // ONLY on initial load, NOT when user manually selected intended language
+    if (!intendedLangOverride && corrections.length === 0 && isSingleWord && onAutoSwitchToSynonyms) {
       onAutoSwitchToSynonyms();
       return;
     }
+
+    const intendedRowHtml = `
+      <div class="polyglot-intended-row">
+        <div class="polyglot-intended-label-wrap">
+          <span class="polyglot-intended-label">Language:</span>
+          ${
+            inferredFromContext
+              ? `<span class="polyglot-inferred-badge" title="Inferred from previous words: &quot;${escapeHtml(this.currentContextBefore.slice(-30))}&quot;">✨ Inferred</span>`
+              : ''
+          }
+        </div>
+        <select class="polyglot-intended-select" id="polyglot-intended-lang" title="Select intended language">
+          ${this.renderLanguageOptions(activeLang)}
+        </select>
+      </div>
+    `;
 
     // Render Google Translate-Style Sentence Correction
     if (corrections.length > 0) {
@@ -533,6 +609,7 @@ export class SelectionPopup {
       setElementHtml(
         fixesContainer,
         `
+        ${intendedRowHtml}
         <div class="polyglot-sentence-correction">
           <div class="polyglot-correction-caption">
             <svg width="13" height="13" viewBox="0 0 20 20" fill="currentColor">
@@ -579,6 +656,13 @@ export class SelectionPopup {
         </div>
       `
       );
+
+      // Bind Intended Language change listener
+      const intendedSelect = fixesContainer.querySelector('#polyglot-intended-lang') as HTMLSelectElement | null;
+      intendedSelect?.addEventListener('change', () => {
+        const chosen = intendedSelect.value;
+        this.loadFixes(text, popup, isSingleWord, undefined, chosen);
+      });
 
       // Apply All Corrections
       const applyAllBtn = fixesContainer.querySelector('#polyglot-btn-apply-all') as HTMLElement;
@@ -656,10 +740,11 @@ export class SelectionPopup {
       setElementHtml(
         fixesContainer,
         `
-        <div style="text-align: center; padding: 22px 14px; color: #94a3b8; font-size: 13px; line-height: 1.6;">
+        ${intendedRowHtml}
+        <div style="text-align: center; padding: 18px 14px; color: #94a3b8; font-size: 13px; line-height: 1.6;">
           <div style="font-size: 20px; margin-bottom: 6px;">✨</div>
           <div style="font-weight: 600; color: #f8fafc; margin-bottom: 4px;">No spelling issues found</div>
-          <div style="font-size: 11.5px; color: #64748b;">The highlighted text looks grammatically correct.</div>
+          <div style="font-size: 11.5px; color: #64748b;">The highlighted text looks grammatically correct in ${escapeHtml(getLanguageName(activeLang))}.</div>
           <div style="margin-top: 10px;">
             <button class="polyglot-btn-sm" id="polyglot-switch-to-trans">
               Switch to Translate tab
@@ -668,6 +753,13 @@ export class SelectionPopup {
         </div>
       `
       );
+
+      // Bind Intended Language change listener in clean state as well
+      const intendedSelect = fixesContainer.querySelector('#polyglot-intended-lang') as HTMLSelectElement | null;
+      intendedSelect?.addEventListener('change', () => {
+        const chosen = intendedSelect.value;
+        this.loadFixes(text, popup, isSingleWord, undefined, chosen);
+      });
 
       fixesContainer
         .querySelector('#polyglot-switch-to-trans')
@@ -876,6 +968,8 @@ export class SelectionPopup {
   public static close(): void {
     this.savedInputTarget = null;
     this.savedRange = null;
+    this.currentContextBefore = '';
+    this.currentIntendedLang = '';
     if (this.floatingPill) {
       this.floatingPill.remove();
       this.floatingPill = null;

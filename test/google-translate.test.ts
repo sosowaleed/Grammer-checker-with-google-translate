@@ -150,4 +150,31 @@ describe('parseHtmlCorrections', () => {
     expect(corrections[1].offset).toBe(16);
     expect(corrections[1].length).toBe(5);
   });
+
+  it('correctly corrects "sandwitch" to "sandwich" for "Whole sandwitch"', () => {
+    const original = 'Whole sandwitch';
+    const html = 'Whole <b><i>sandwich</i></b>';
+
+    const corrections = parseHtmlCorrections(original, html);
+
+    expect(corrections.length).toBe(1);
+    expect(corrections[0].original).toBe('sandwitch');
+    expect(corrections[0].corrected).toBe('sandwich');
+    expect(corrections[0].offset).toBe(6);
+    expect(corrections[0].length).toBe(9);
+  });
+
+  it('correctly corrects standalone "sandwitch" to "sandwich"', () => {
+    const original = 'sandwitch';
+    const html = '<b><i>sandwich</i></b>';
+
+    const corrections = parseHtmlCorrections(original, html);
+
+    expect(corrections.length).toBe(1);
+    expect(corrections[0].original).toBe('sandwitch');
+    expect(corrections[0].corrected).toBe('sandwich');
+    expect(corrections[0].offset).toBe(0);
+    expect(corrections[0].length).toBe(9);
+  });
 });
+

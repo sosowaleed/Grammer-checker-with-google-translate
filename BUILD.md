@@ -1,6 +1,6 @@
 # PolyglotGrammar - Extension Build Instructions
 
-This document provides step-by-step instructions for Mozilla Add-ons (AMO) reviewers to reproduce the exact `polyglot-grammar-firefox-v1.0.7.zip` package from this source code.
+This document provides step-by-step instructions for Mozilla Add-ons (AMO) reviewers to reproduce the exact `polyglot-grammar-firefox-v1.0.8.zip` package from this source code.
 
 ---
 
@@ -75,14 +75,14 @@ npm run pack
 ```
 The output zip archive will be generated at:
 ```
-dist/polyglot-grammar-firefox-v1.0.7.zip
+dist/polyglot-grammar-firefox-v1.0.8.zip
 ```
 
 ---
 
 ## 4. Running Unit Tests
 
-To verify all test suites (40 tests across 8 test suites):
+To verify all test suites (45 tests across 9 test suites):
 ```bash
 npm test
 ```
