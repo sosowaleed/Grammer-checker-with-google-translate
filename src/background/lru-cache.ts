@@ -23,11 +23,11 @@ export class LRUCache<T> {
   }
 
   private getStorageApi(): any {
-    if (typeof chrome !== 'undefined' && chrome.storage) {
-      return chrome.storage.session || chrome.storage.local;
+    if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+      return chrome.storage.local;
     }
-    if (typeof (globalThis as any).browser !== 'undefined' && (globalThis as any).browser?.storage) {
-      return (globalThis as any).browser.storage.session || (globalThis as any).browser.storage.local;
+    if (typeof (globalThis as any).browser !== 'undefined' && (globalThis as any).browser?.storage?.local) {
+      return (globalThis as any).browser.storage.local;
     }
     return null;
   }

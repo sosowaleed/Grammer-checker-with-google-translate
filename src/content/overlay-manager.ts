@@ -124,20 +124,31 @@ export class OverlayManager {
 
     const langUpper = (detectedLang || 'en').toUpperCase();
 
+    badge.replaceChildren();
     if (isSingleLine) {
       const iconSize = 14;
       badge.style.left = `${rect.right + scrollX - 18}px`;
       badge.style.top = `${rect.top + scrollY + Math.max(1, (rect.height - iconSize) / 2)}px`;
-      badge.innerHTML = errorCount > 0
-        ? `<span class="compact-count">${errorCount}</span>`
-        : `<div class="badge-dot" style="margin:0;"></div>`;
+      if (errorCount > 0) {
+        const countSpan = document.createElement('span');
+        countSpan.className = 'compact-count';
+        countSpan.textContent = String(errorCount);
+        badge.appendChild(countSpan);
+      } else {
+        const dot = document.createElement('div');
+        dot.className = 'badge-dot';
+        dot.style.margin = '0';
+        badge.appendChild(dot);
+      }
     } else {
       badge.style.left = `${rect.right + scrollX - 82}px`;
       badge.style.top = `${rect.bottom + scrollY - 26}px`;
-      badge.innerHTML = `
-        <div class="badge-dot"></div>
-        <span>${langUpper} • ${errorCount > 0 ? `${errorCount} issue${errorCount > 1 ? 's' : ''}` : 'Polyglot'}</span>
-      `;
+      const dot = document.createElement('div');
+      dot.className = 'badge-dot';
+      const textSpan = document.createElement('span');
+      textSpan.textContent = `${langUpper} • ${errorCount > 0 ? `${errorCount} issue${errorCount > 1 ? 's' : ''}` : 'Polyglot'}`;
+      badge.appendChild(dot);
+      badge.appendChild(textSpan);
     }
 
     badge.title = `PolyglotGrammar [${langUpper}]: ${

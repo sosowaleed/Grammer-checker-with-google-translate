@@ -18,6 +18,11 @@ function escapeHtml(text: string): string {
     .replace(/'/g, '&#39;');
 }
 
+function setElementHtml(target: HTMLElement, html: string): void {
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  target.replaceChildren(...Array.from(doc.body.childNodes));
+}
+
 export function buildCorrectedSentence(
   originalText: string,
   corrections: GrammarCorrection[]
@@ -181,12 +186,16 @@ export class SelectionPopup {
     pill.style.top = `${pillTop}px`;
     pill.style.left = `${pillLeft}px`;
 
-    pill.innerHTML = `
-      <svg viewBox="0 0 20 20" fill="currentColor">
-        <path d="M10 2a1 1 0 011 1v1.323l3.954 1.582 1.599-.8a1 1 0 01.894 1.79l-1.233.616 1.738 5.42a1 1 0 01-.285 1.05A3.989 3.989 0 0115 15a3.989 3.989 0 01-2.667-1.019 1 1 0 01-.285-1.05l1.715-5.349L11 6.477V16h2a1 1 0 110 2H7a1 1 0 110-2h2V6.477L6.237 7.582l1.715 5.349a1 1 0 01-.285 1.05A3.989 3.989 0 015 15a3.989 3.989 0 01-2.667-1.019 1 1 0 01-.285-1.05l1.738-5.42-1.233-.617a1 1 0 01.894-1.789l1.599.799L9 4.323V3a1 1 0 011-1z"/>
-      </svg>
-      <span>${isSingleWord ? 'Synonyms & Translate' : 'Translate'}</span>
-    `;
+    pill.replaceChildren();
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('viewBox', '0 0 20 20');
+    svg.setAttribute('fill', 'currentColor');
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('d', 'M10 2a1 1 0 011 1v1.323l3.954 1.582 1.599-.8a1 1 0 01.894 1.79l-1.233.616 1.738 5.42a1 1 0 01-.285 1.05A3.989 3.989 0 0115 15a3.989 3.989 0 01-2.667-1.019 1 1 0 01-.285-1.05l1.715-5.349L11 6.477V16h2a1 1 0 110 2H7a1 1 0 110-2h2V6.477L6.237 7.582l1.715 5.349a1 1 0 01-.285 1.05A3.989 3.989 0 015 15a3.989 3.989 0 01-2.667-1.019 1 1 0 01-.285-1.05l1.738-5.42-1.233-.617a1 1 0 01.894-1.789l1.599.799L9 4.323V3a1 1 0 011-1z');
+    svg.appendChild(path);
+    const pillSpan = document.createElement('span');
+    pillSpan.textContent = isSingleWord ? 'Synonyms & Translate' : 'Translate';
+    pill.append(svg, pillSpan);
 
     // Immediately check text for spelling/grammar so pill and card are dynamic
     sendRuntimeMessage<CheckTextResponse>({
@@ -264,7 +273,9 @@ export class SelectionPopup {
     const fixesCount = hasCachedFixes ? this.cachedCorrections!.corrections.length : 0;
 
     // Render structure with 3 tabs: Fixes, Synonyms (if single word/short), Translate
-    popup.innerHTML = `
+    setElementHtml(
+      popup,
+      `
       <div class="polyglot-card-header">
         <div class="polyglot-logo-wrap">
           <div class="polyglot-logo-dot"></div>
@@ -340,7 +351,7 @@ export class SelectionPopup {
           </div>
         </div>
       </div>
-    `;
+    `);
 
     popup.addEventListener('click', (e) => e.stopPropagation());
     popup.addEventListener('mousedown', (e) => e.stopPropagation());
@@ -466,12 +477,15 @@ export class SelectionPopup {
       corrections = this.cachedCorrections.corrections;
       detectedLang = this.cachedCorrections.detectedLanguage || 'en';
     } else {
-      fixesContainer.innerHTML = `
+      setElementHtml(
+        fixesContainer,
+        `
         <div style="display: flex; align-items: center; justify-content: center; padding: 20px; gap: 8px; color: #94a3b8;">
           <div class="polyglot-spinner"></div>
           <span>Checking spelling & grammar...</span>
         </div>
-      `;
+      `
+      );
 
       try {
         const response = await sendRuntimeMessage<CheckTextResponse>({
@@ -516,7 +530,9 @@ export class SelectionPopup {
     if (corrections.length > 0) {
       const { correctedText, htmlHighlighted } = buildCorrectedSentence(text, corrections);
 
-      fixesContainer.innerHTML = `
+      setElementHtml(
+        fixesContainer,
+        `
         <div class="polyglot-sentence-correction">
           <div class="polyglot-correction-caption">
             <svg width="13" height="13" viewBox="0 0 20 20" fill="currentColor">
@@ -561,7 +577,8 @@ export class SelectionPopup {
             )
             .join('')}
         </div>
-      `;
+      `
+      );
 
       // Apply All Corrections
       const applyAllBtn = fixesContainer.querySelector('#polyglot-btn-apply-all') as HTMLElement;
@@ -636,7 +653,9 @@ export class SelectionPopup {
         });
       });
     } else {
-      fixesContainer.innerHTML = `
+      setElementHtml(
+        fixesContainer,
+        `
         <div style="text-align: center; padding: 22px 14px; color: #94a3b8; font-size: 13px; line-height: 1.6;">
           <div style="font-size: 20px; margin-bottom: 6px;">✨</div>
           <div style="font-weight: 600; color: #f8fafc; margin-bottom: 4px;">No spelling issues found</div>
@@ -647,7 +666,8 @@ export class SelectionPopup {
             </button>
           </div>
         </div>
-      `;
+      `
+      );
 
       fixesContainer
         .querySelector('#polyglot-switch-to-trans')
@@ -664,12 +684,15 @@ export class SelectionPopup {
     if (!synonymsContainer) return;
 
     // Show spinner if not already showing
-    synonymsContainer.innerHTML = `
+    setElementHtml(
+      synonymsContainer,
+      `
       <div style="display: flex; align-items: center; justify-content: center; padding: 20px; gap: 8px; color: #94a3b8;">
         <div class="polyglot-spinner"></div>
         <span>Fetching synonyms...</span>
       </div>
-    `;
+    `
+    );
 
     try {
       const response = await sendRuntimeMessage<SynonymsResponse>({
@@ -705,18 +728,21 @@ export class SelectionPopup {
               </div>
             </div>
           `;
-          synonymsContainer.innerHTML = defHtml;
+          setElementHtml(synonymsContainer, defHtml);
           return;
         }
 
-        synonymsContainer.innerHTML = `
+        setElementHtml(
+          synonymsContainer,
+          `
           <div style="text-align: center; padding: 20px 14px; color: #94a3b8; font-size: 12.5px; line-height: 1.6;">
             <div style="font-weight: 600; color: #f1f5f9; margin-bottom: 4px;">No synonyms or definitions found for "${escapeHtml(word)}"</div>
             <div style="font-size: 11px; color: #64748b;">
               Check the <b style="color: #38bdf8; cursor: pointer;" id="polyglot-switch-fixes">Fixes</b> tab or <b style="color: #818cf8; cursor: pointer;" id="polyglot-switch-trans">Translate</b> tab!
             </div>
           </div>
-        `;
+        `
+        );
         synonymsContainer.querySelector('#polyglot-switch-fixes')?.addEventListener('click', () => {
           const tabFixes = popup.querySelector('#tab-fixes') as HTMLElement;
           if (tabFixes) tabFixes.click();
@@ -744,7 +770,7 @@ export class SelectionPopup {
           </div>
         `;
       }
-      synonymsContainer.innerHTML = html;
+      setElementHtml(synonymsContainer, html);
 
       // Click on synonym chip
       const chips = synonymsContainer.querySelectorAll('.polyglot-term-chip');
@@ -770,11 +796,14 @@ export class SelectionPopup {
         });
       });
     } catch {
-      synonymsContainer.innerHTML = `
+      setElementHtml(
+        synonymsContainer,
+        `
         <div style="text-align: center; padding: 18px; color: #94a3b8; font-size: 12px;">
           No synonyms found for "${word}".
         </div>
-      `;
+      `
+      );
     }
   }
 

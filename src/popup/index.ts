@@ -48,6 +48,11 @@ function escapeRegExp(string: string): string {
   return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+function setElementHtml(target: HTMLElement, html: string): void {
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  target.replaceChildren(...Array.from(doc.body.childNodes));
+}
+
 function buildCorrectedSentence(
   originalText: string,
   corrections: GrammarCorrection[]
@@ -113,24 +118,36 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Populate UI Languages
   const uiLanguages = getAvailableUiLanguages();
-  uiLanguageSelect.innerHTML = uiLanguages
-    .map((l) => `<option value="${l.code}">${l.nativeName} (${l.name})</option>`)
-    .join('');
+  uiLanguageSelect.replaceChildren(
+    ...uiLanguages.map((l) => {
+      const opt = document.createElement('option');
+      opt.value = l.code;
+      opt.textContent = `${l.nativeName} (${l.name})`;
+      return opt;
+    })
+  );
 
   // Populate Target Languages
-  let langHtml = '<optgroup label="Popular Languages">';
+  const popularGroup = document.createElement('optgroup');
+  popularGroup.label = 'Popular Languages';
   for (const code of POPULAR_LANGUAGES) {
     const lang = SUPPORTED_LANGUAGES.find((l) => l.code === code);
     if (lang) {
-      langHtml += `<option value="${lang.code}">${lang.name} (${lang.nativeName})</option>`;
+      const opt = document.createElement('option');
+      opt.value = lang.code;
+      opt.textContent = `${lang.name} (${lang.nativeName})`;
+      popularGroup.appendChild(opt);
     }
   }
-  langHtml += '</optgroup><optgroup label="All Supported Languages">';
+  const allGroup = document.createElement('optgroup');
+  allGroup.label = 'All Supported Languages';
   for (const lang of SUPPORTED_LANGUAGES) {
-    langHtml += `<option value="${lang.code}">${lang.name}</option>`;
+    const opt = document.createElement('option');
+    opt.value = lang.code;
+    opt.textContent = lang.name;
+    allGroup.appendChild(opt);
   }
-  langHtml += '</optgroup>';
-  languageSelect.innerHTML = langHtml;
+  languageSelect.replaceChildren(popularGroup, allGroup);
 
   // Fetch current settings
   let settings: UserSettings;
@@ -175,53 +192,71 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 
   function renderDomains() {
-    domainsList.innerHTML = '';
+    domainsList.replaceChildren();
     if (!settings.ignoredDomains || settings.ignoredDomains.length === 0) {
-      domainsList.innerHTML = `<span style="color: #64748b; font-size: 11px;">${t('ignored_domains_none', settings.uiLanguage)}</span>`;
+      const emptySpan = document.createElement('span');
+      emptySpan.style.color = '#64748b';
+      emptySpan.style.fontSize = '11px';
+      emptySpan.textContent = t('ignored_domains_none', settings.uiLanguage);
+      domainsList.appendChild(emptySpan);
       return;
     }
 
     settings.ignoredDomains.forEach((domain) => {
       const tag = document.createElement('div');
       tag.className = 'domain-tag';
-      tag.innerHTML = `
-        <span>${escapeHtml(domain)}</span>
-        <span class="del-btn" data-domain="${escapeHtml(domain)}">&times;</span>
-      `;
 
-      tag.querySelector('.del-btn')?.addEventListener('click', async () => {
+      const label = document.createElement('span');
+      label.textContent = domain;
+
+      const delBtn = document.createElement('span');
+      delBtn.className = 'del-btn';
+      delBtn.textContent = '×';
+      delBtn.setAttribute('data-domain', domain);
+
+      delBtn.addEventListener('click', async () => {
         settings.ignoredDomains = settings.ignoredDomains.filter((d) => d !== domain);
         await saveSettings();
         renderDomains();
       });
 
+      tag.append(label, delBtn);
       domainsList.appendChild(tag);
     });
   }
 
   function renderWords() {
     if (!wordsList) return;
-    wordsList.innerHTML = '';
+    wordsList.replaceChildren();
     if (!settings.ignoredWords || settings.ignoredWords.length === 0) {
-      wordsList.innerHTML = `<span style="color: #64748b; font-size: 11px;">${t('ignored_words_none', settings.uiLanguage)}</span>`;
+      const emptySpan = document.createElement('span');
+      emptySpan.style.color = '#64748b';
+      emptySpan.style.fontSize = '11px';
+      emptySpan.textContent = t('ignored_words_none', settings.uiLanguage);
+      wordsList.appendChild(emptySpan);
       return;
     }
 
     settings.ignoredWords.forEach((word) => {
       const tag = document.createElement('div');
       tag.className = 'domain-tag';
-      tag.innerHTML = `
-        <span>${escapeHtml(word)}</span>
-        <span class="del-btn" data-word="${escapeHtml(word)}">&times;</span>
-      `;
 
-      tag.querySelector('.del-btn')?.addEventListener('click', async () => {
+      const label = document.createElement('span');
+      label.textContent = word;
+
+      const delBtn = document.createElement('span');
+      delBtn.className = 'del-btn';
+      delBtn.textContent = '×';
+      delBtn.setAttribute('data-word', word);
+
+      delBtn.addEventListener('click', async () => {
         settings.ignoredWords = settings.ignoredWords.filter((w) => w.toLowerCase() !== word.toLowerCase());
         await sendPopupMessage({ type: 'UNIGNORE_WORD', word });
         await saveSettings();
         renderWords();
       });
 
+      tag.append(label, delBtn);
       wordsList.appendChild(tag);
     });
   }
@@ -348,20 +383,38 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   function renderPlaygroundFixChips(corrections: GrammarCorrection[]): void {
     if (!playgroundIssues) return;
-    playgroundIssues.innerHTML = '';
+    playgroundIssues.replaceChildren();
 
     corrections.forEach((c) => {
       const chip = document.createElement('div');
       chip.className = 'fix-chip';
       chip.title = `Click to replace "${c.original}" with "${c.corrected}"`;
-      chip.innerHTML = `
-        <svg class="fix-icon" viewBox="0 0 20 20" fill="currentColor" width="12" height="12">
-          <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
-        </svg>
-        <span>${escapeHtml(c.original)}</span>
-        <span class="fix-arrow">→</span>
-        <span class="fix-target">${escapeHtml(c.corrected)}</span>
-      `;
+
+      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      svg.setAttribute('class', 'fix-icon');
+      svg.setAttribute('viewBox', '0 0 20 20');
+      svg.setAttribute('fill', 'currentColor');
+      svg.setAttribute('width', '12');
+      svg.setAttribute('height', '12');
+
+      const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      path.setAttribute('fill-rule', 'evenodd');
+      path.setAttribute('clip-rule', 'evenodd');
+      path.setAttribute('d', 'M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z');
+      svg.appendChild(path);
+
+      const origSpan = document.createElement('span');
+      origSpan.textContent = c.original;
+
+      const arrowSpan = document.createElement('span');
+      arrowSpan.className = 'fix-arrow';
+      arrowSpan.textContent = '→';
+
+      const targetSpan = document.createElement('span');
+      targetSpan.className = 'fix-target';
+      targetSpan.textContent = c.corrected;
+
+      chip.append(svg, origSpan, arrowSpan, targetSpan);
 
       chip.addEventListener('click', async () => {
         applySingleCorrection(c);
@@ -394,13 +447,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (!playgroundPopoverBody) return;
 
     if (activeCorrections.length === 0) {
-      playgroundPopoverBody.innerHTML = `
+      setElementHtml(
+        playgroundPopoverBody,
+        `
         <div style="text-align: center; padding: 14px 10px; color: #94a3b8; font-size: 12px;">
           <div style="font-size: 18px; margin-bottom: 4px;">✨</div>
           <div style="color: #6ee7b7; font-weight: 600;">${t('playground_clean', settings.uiLanguage)}</div>
           <div style="font-size: 11px; margin-top: 2px;">The text looks grammatically correct!</div>
         </div>
-      `;
+      `
+      );
       return;
     }
 
@@ -409,7 +465,9 @@ document.addEventListener('DOMContentLoaded', async () => {
       activeCorrections
     );
 
-    playgroundPopoverBody.innerHTML = `
+    setElementHtml(
+      playgroundPopoverBody,
+      `
       <div class="playground-sentence-box">
         <div style="font-size: 10px; color: #94a3b8; margin-bottom: 4px;">${t('showing_correction_for', settings.uiLanguage)}</div>
         <div style="color: #f8fafc; font-size: 12px; margin-bottom: 8px;">${htmlHighlighted}</div>
@@ -437,7 +495,8 @@ document.addEventListener('DOMContentLoaded', async () => {
           )
           .join('')}
       </div>
-    `;
+    `
+    );
 
     // Apply full sentence button
     const applyAllBtn = playgroundPopoverBody.querySelector('#btnApplyAllPlayground');
@@ -468,7 +527,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   async function checkPlaygroundLive(): Promise<void> {
     const text = (playgroundText.value || '').trim();
     if (!text || text.length < 2) {
-      if (playgroundIssues) playgroundIssues.innerHTML = '';
+      if (playgroundIssues) playgroundIssues.replaceChildren();
       if (playgroundPill && playgroundPillText) {
         playgroundPill.className = 'playground-floating-pill';
         playgroundPillText.textContent = t('playground_ready', settings.uiLanguage);
@@ -514,7 +573,12 @@ document.addEventListener('DOMContentLoaded', async () => {
           playgroundPillText.textContent = `✓ ${t('playground_clean', settings.uiLanguage)} (${lang})`;
         }
         if (playgroundIssues) {
-          playgroundIssues.innerHTML = `<span style="color: #6ee7b7; font-size: 11px; padding: 2px 0;">✓ ${t('playground_clean', settings.uiLanguage)}</span>`;
+          const cleanSpan = document.createElement('span');
+          cleanSpan.style.color = '#6ee7b7';
+          cleanSpan.style.fontSize = '11px';
+          cleanSpan.style.padding = '2px 0';
+          cleanSpan.textContent = `✓ ${t('playground_clean', settings.uiLanguage)}`;
+          playgroundIssues.replaceChildren(cleanSpan);
         }
         if (playgroundPopover.style.display !== 'none') {
           renderPlaygroundPopover();
@@ -569,20 +633,27 @@ document.addEventListener('DOMContentLoaded', async () => {
 
       // If synonyms found, display synonym chips
       if (resp.synonyms && resp.synonyms.length > 0) {
-        playgroundIssues.innerHTML = '';
+        playgroundIssues.replaceChildren();
         const title = document.createElement('div');
         title.style.width = '100%';
         title.style.fontSize = '11px';
         title.style.color = '#a5b4fc';
         title.style.marginBottom = '2px';
-        title.textContent = `${t('tab_synonyms', settings.uiLanguage)}: "${escapeHtml(selected)}" (click to replace):`;
+        title.textContent = `${t('tab_synonyms', settings.uiLanguage)}: "${selected}" (click to replace):`;
         playgroundIssues.appendChild(title);
 
         for (const group of resp.synonyms) {
           for (const term of group.terms.slice(0, 5)) {
             const synChip = document.createElement('div');
             synChip.className = 'synonym-chip';
-            synChip.innerHTML = `<span>${escapeHtml(term)}</span><span class="syn-badge">${escapeHtml(group.pos)}</span>`;
+
+            const termSpan = document.createElement('span');
+            termSpan.textContent = term;
+            const badgeSpan = document.createElement('span');
+            badgeSpan.className = 'syn-badge';
+            badgeSpan.textContent = group.pos;
+            synChip.append(termSpan, badgeSpan);
+
             synChip.addEventListener('click', () => {
               playgroundText.setRangeText(term, start, end, 'end');
               checkPlaygroundLive();
@@ -595,7 +666,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
       // If no synonyms, but definitions found, display definition card!
       if (resp.definitions && resp.definitions.length > 0) {
-        playgroundIssues.innerHTML = '';
+        playgroundIssues.replaceChildren();
         const defWrap = document.createElement('div');
         defWrap.style.width = '100%';
         defWrap.style.background = 'rgba(15, 23, 42, 0.85)';
@@ -615,7 +686,15 @@ document.addEventListener('DOMContentLoaded', async () => {
           const entry = document.createElement('div');
           entry.style.color = '#e2e8f0';
           entry.style.marginTop = '3px';
-          entry.innerHTML = `<b style="color: #818cf8; text-transform: uppercase; font-size: 9.5px;">[${escapeHtml(def.pos)}]</b> ${escapeHtml(def.gloss)}`;
+
+          const posB = document.createElement('b');
+          posB.style.color = '#818cf8';
+          posB.style.textTransform = 'uppercase';
+          posB.style.fontSize = '9.5px';
+          posB.textContent = `[${def.pos}]`;
+
+          const glossText = document.createTextNode(` ${def.gloss}`);
+          entry.append(posB, glossText);
           defWrap.appendChild(entry);
         }
 

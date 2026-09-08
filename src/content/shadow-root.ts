@@ -22,7 +22,7 @@ export class ShadowRootHost {
       this.shadowRoot = existingHost.attachShadow({ mode: 'open' });
     }
 
-    this.shadowRoot.innerHTML = ''; // clear
+    this.shadowRoot.replaceChildren();
 
     // Inject isolated CSS styles
     const styleEl = document.createElement('style');
@@ -54,12 +54,22 @@ export class ShadowRootHost {
   public showToast(message: string, durationMs: number = 2200): void {
     const toast = document.createElement('div');
     toast.className = 'polyglot-toast';
-    toast.innerHTML = `
-      <svg class="polyglot-toast-icon" viewBox="0 0 20 20" fill="currentColor">
-        <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
-      </svg>
-      <span>${message}</span>
-    `;
+
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('class', 'polyglot-toast-icon');
+    svg.setAttribute('viewBox', '0 0 20 20');
+    svg.setAttribute('fill', 'currentColor');
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('fill-rule', 'evenodd');
+    path.setAttribute('d', 'M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z');
+    path.setAttribute('clip-rule', 'evenodd');
+    svg.appendChild(path);
+
+    const span = document.createElement('span');
+    span.textContent = message;
+
+    toast.appendChild(svg);
+    toast.appendChild(span);
     this.toastContainer.appendChild(toast);
 
     setTimeout(() => {

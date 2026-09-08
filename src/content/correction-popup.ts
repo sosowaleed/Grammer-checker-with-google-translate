@@ -3,6 +3,20 @@ import { ShadowRootHost } from './shadow-root';
 import { TextReplacer } from './text-replacer';
 import { sendRuntimeMessage } from '../shared/messaging';
 
+function createCheckSvg(width = 12, height = 12): SVGSVGElement {
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('width', String(width));
+  svg.setAttribute('height', String(height));
+  svg.setAttribute('viewBox', '0 0 20 20');
+  svg.setAttribute('fill', 'currentColor');
+  const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  path.setAttribute('fill-rule', 'evenodd');
+  path.setAttribute('d', 'M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z');
+  path.setAttribute('clip-rule', 'evenodd');
+  svg.appendChild(path);
+  return svg;
+}
+
 export class CorrectionPopup {
   private static currentPopup: HTMLElement | null = null;
   private static dismissHandler: ((e: MouseEvent) => void) | null = null;
@@ -57,36 +71,80 @@ export class CorrectionPopup {
     const arrowOffset = Math.max(16, Math.min(popupWidth - 16, wordCenterX - left));
     popup.style.setProperty('--arrow-left', `${arrowOffset}px`);
 
-    popup.innerHTML = `
-      <div class="polyglot-card-header" style="margin-bottom: 6px; padding-bottom: 5px;">
-        <div class="polyglot-logo-wrap">
-          <div class="polyglot-logo-dot"></div>
-          <span style="font-size: 10px;">Suggestions</span>
-        </div>
-        <span class="polyglot-lang-tag">${correction.type === 'grammar' ? 'Grammar' : 'Spelling'}</span>
-      </div>
+    popup.replaceChildren();
 
-      <div class="polyglot-correction-row" style="margin-bottom: 6px;">
-        <span class="polyglot-typo-text">${correction.original}</span>
-        <span class="polyglot-arrow">→</span>
-        <button class="polyglot-suggest-btn" id="polyglot-btn-accept" title="Click to accept suggestion">
-          <svg width="12" height="12" viewBox="0 0 20 20" fill="currentColor">
-            <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
-          </svg>
-          <span>${correction.corrected}</span>
-        </button>
-      </div>
+    // Header
+    const header = document.createElement('div');
+    header.className = 'polyglot-card-header';
+    header.style.marginBottom = '6px';
+    header.style.paddingBottom = '5px';
 
-      ${
-        correction.explanation
-          ? `<div class="polyglot-explanation" style="font-size: 10.5px; margin-bottom: 4px;">${correction.explanation}</div>`
-          : ''
-      }
+    const logoWrap = document.createElement('div');
+    logoWrap.className = 'polyglot-logo-wrap';
+    const logoDot = document.createElement('div');
+    logoDot.className = 'polyglot-logo-dot';
+    const logoTitle = document.createElement('span');
+    logoTitle.style.fontSize = '10px';
+    logoTitle.textContent = 'Suggestions';
+    logoWrap.appendChild(logoDot);
+    logoWrap.appendChild(logoTitle);
 
-      <div class="polyglot-card-actions" style="margin-top: 4px;">
-        <button class="polyglot-btn-sm" id="polyglot-btn-ignore" title="Dismiss suggestion">Ignore</button>
-      </div>
-    `;
+    const langTag = document.createElement('span');
+    langTag.className = 'polyglot-lang-tag';
+    langTag.textContent = correction.type === 'grammar' ? 'Grammar' : 'Spelling';
+
+    header.appendChild(logoWrap);
+    header.appendChild(langTag);
+
+    // Row
+    const row = document.createElement('div');
+    row.className = 'polyglot-correction-row';
+    row.style.marginBottom = '6px';
+
+    const typoSpan = document.createElement('span');
+    typoSpan.className = 'polyglot-typo-text';
+    typoSpan.textContent = correction.original;
+
+    const arrowSpan = document.createElement('span');
+    arrowSpan.className = 'polyglot-arrow';
+    arrowSpan.textContent = '→';
+
+    const acceptBtn = document.createElement('button');
+    acceptBtn.className = 'polyglot-suggest-btn';
+    acceptBtn.id = 'polyglot-btn-accept';
+    acceptBtn.title = 'Click to accept suggestion';
+    acceptBtn.appendChild(createCheckSvg(12, 12));
+    const acceptText = document.createElement('span');
+    acceptText.textContent = correction.corrected;
+    acceptBtn.appendChild(acceptText);
+
+    row.appendChild(typoSpan);
+    row.appendChild(arrowSpan);
+    row.appendChild(acceptBtn);
+
+    popup.appendChild(header);
+    popup.appendChild(row);
+
+    if (correction.explanation) {
+      const explDiv = document.createElement('div');
+      explDiv.className = 'polyglot-explanation';
+      explDiv.style.fontSize = '10.5px';
+      explDiv.style.marginBottom = '4px';
+      explDiv.textContent = correction.explanation;
+      popup.appendChild(explDiv);
+    }
+
+    const actions = document.createElement('div');
+    actions.className = 'polyglot-card-actions';
+    actions.style.marginTop = '4px';
+    const ignoreBtn = document.createElement('button');
+    ignoreBtn.className = 'polyglot-btn-sm';
+    ignoreBtn.id = 'polyglot-btn-ignore';
+    ignoreBtn.title = 'Dismiss suggestion';
+    ignoreBtn.textContent = 'Ignore';
+    actions.appendChild(ignoreBtn);
+
+    popup.appendChild(actions);
 
     // Accept action
     let applied = false;
@@ -138,22 +196,18 @@ export class CorrectionPopup {
       onAccept();
     };
 
-    const acceptBtn = popup.querySelector('#polyglot-btn-accept') as HTMLButtonElement;
-    if (acceptBtn) {
-      acceptBtn.addEventListener('mousedown', (e) => {
-        e.stopPropagation();
-        e.preventDefault();
-        applyCorrection();
-      });
-      acceptBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        e.preventDefault();
-        applyCorrection();
-      });
-    }
+    acceptBtn.addEventListener('mousedown', (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      applyCorrection();
+    });
+    acceptBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      applyCorrection();
+    });
 
     // Ignore action
-    const ignoreBtn = popup.querySelector('#polyglot-btn-ignore') as HTMLButtonElement;
     if (ignoreBtn) {
       let ignored = false;
       const handleIgnore = async (e: Event) => {
@@ -266,50 +320,112 @@ export class CorrectionPopup {
     const arrowOffset = Math.max(16, Math.min(popupWidth - 16, anchorCenterX - left));
     popup.style.setProperty('--arrow-left', `${arrowOffset}px`);
 
-    popup.innerHTML = `
-      <div class="polyglot-card-header" style="margin-bottom: 8px; padding-bottom: 6px;">
-        <div class="polyglot-logo-wrap">
-          <div class="polyglot-logo-dot"></div>
-          <span style="font-size: 10px;">Detected Issues</span>
-        </div>
-        <span class="polyglot-lang-tag" id="polyglot-list-count">${corrections.length} ${corrections.length > 1 ? 'Issues' : 'Issue'}</span>
-      </div>
+    popup.replaceChildren();
 
-      <div class="polyglot-fixes-list" id="polyglot-fixes-list-body" style="display: flex; flex-direction: column; gap: 6px; max-height: 200px; overflow-y: auto; padding-right: 2px;">
-        ${corrections
-          .map(
-            (c, idx) => `
-          <div class="polyglot-correction-row" data-item-idx="${idx}" style="margin-bottom: 0; justify-content: space-between; background: rgba(255, 255, 255, 0.04); padding: 5px 8px; border-radius: 6px;">
-            <span class="polyglot-typo-text" style="max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${c.original}">${c.original}</span>
-            <span class="polyglot-arrow">→</span>
-            <button class="polyglot-suggest-btn polyglot-fix-item-btn" data-fix-idx="${idx}" title="Fix '${c.original}' → '${c.corrected}'">
-              <svg width="11" height="11" viewBox="0 0 20 20" fill="currentColor">
-                <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
-              </svg>
-              <span>${c.corrected}</span>
-            </button>
-          </div>
-        `
-          )
-          .join('')}
-      </div>
+    // Header
+    const header = document.createElement('div');
+    header.className = 'polyglot-card-header';
+    header.style.marginBottom = '8px';
+    header.style.paddingBottom = '6px';
 
-      <div class="polyglot-card-actions" style="margin-top: 8px; justify-content: space-between;">
-        ${
-          corrections.length > 1
-            ? `
-          <button class="polyglot-suggest-btn" id="polyglot-btn-fix-all" style="font-size: 11px; padding: 4px 8px;">
-            <svg width="11" height="11" viewBox="0 0 20 20" fill="currentColor">
-              <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
-            </svg>
-            <span>Fix All (${corrections.length})</span>
-          </button>
-        `
-            : '<div></div>'
-        }
-        <button class="polyglot-btn-sm" id="polyglot-btn-close-list" title="Close">Close</button>
-      </div>
-    `;
+    const logoWrap = document.createElement('div');
+    logoWrap.className = 'polyglot-logo-wrap';
+    const logoDot = document.createElement('div');
+    logoDot.className = 'polyglot-logo-dot';
+    const logoTitle = document.createElement('span');
+    logoTitle.style.fontSize = '10px';
+    logoTitle.textContent = 'Detected Issues';
+    logoWrap.appendChild(logoDot);
+    logoWrap.appendChild(logoTitle);
+
+    const countTag = document.createElement('span');
+    countTag.className = 'polyglot-lang-tag';
+    countTag.id = 'polyglot-list-count';
+    countTag.textContent = `${corrections.length} ${corrections.length > 1 ? 'Issues' : 'Issue'}`;
+
+    header.appendChild(logoWrap);
+    header.appendChild(countTag);
+
+    // Fixes List
+    const fixesList = document.createElement('div');
+    fixesList.className = 'polyglot-fixes-list';
+    fixesList.id = 'polyglot-fixes-list-body';
+    fixesList.style.display = 'flex';
+    fixesList.style.flexDirection = 'column';
+    fixesList.style.gap = '6px';
+    fixesList.style.maxHeight = '200px';
+    fixesList.style.overflowY = 'auto';
+    fixesList.style.paddingRight = '2px';
+
+    corrections.forEach((c, idx) => {
+      const itemRow = document.createElement('div');
+      itemRow.className = 'polyglot-correction-row';
+      itemRow.setAttribute('data-item-idx', String(idx));
+      itemRow.style.marginBottom = '0';
+      itemRow.style.justifyContent = 'space-between';
+      itemRow.style.background = 'rgba(255, 255, 255, 0.04)';
+      itemRow.style.padding = '5px 8px';
+      itemRow.style.borderRadius = '6px';
+
+      const typo = document.createElement('span');
+      typo.className = 'polyglot-typo-text';
+      typo.style.maxWidth = '110px';
+      typo.style.overflow = 'hidden';
+      typo.style.textOverflow = 'ellipsis';
+      typo.style.whiteSpace = 'nowrap';
+      typo.title = c.original;
+      typo.textContent = c.original;
+
+      const arrow = document.createElement('span');
+      arrow.className = 'polyglot-arrow';
+      arrow.textContent = '→';
+
+      const fixBtn = document.createElement('button');
+      fixBtn.className = 'polyglot-suggest-btn polyglot-fix-item-btn';
+      fixBtn.setAttribute('data-fix-idx', String(idx));
+      fixBtn.title = `Fix '${c.original}' → '${c.corrected}'`;
+      fixBtn.appendChild(createCheckSvg(11, 11));
+      const btnTxt = document.createElement('span');
+      btnTxt.textContent = c.corrected;
+      fixBtn.appendChild(btnTxt);
+
+      itemRow.appendChild(typo);
+      itemRow.appendChild(arrow);
+      itemRow.appendChild(fixBtn);
+      fixesList.appendChild(itemRow);
+    });
+
+    // Actions
+    const actions = document.createElement('div');
+    actions.className = 'polyglot-card-actions';
+    actions.style.marginTop = '8px';
+    actions.style.justifyContent = 'space-between';
+
+    if (corrections.length > 1) {
+      const fixAllBtn = document.createElement('button');
+      fixAllBtn.className = 'polyglot-suggest-btn';
+      fixAllBtn.id = 'polyglot-btn-fix-all';
+      fixAllBtn.style.fontSize = '11px';
+      fixAllBtn.style.padding = '4px 8px';
+      fixAllBtn.appendChild(createCheckSvg(11, 11));
+      const fixAllTxt = document.createElement('span');
+      fixAllTxt.textContent = `Fix All (${corrections.length})`;
+      fixAllBtn.appendChild(fixAllTxt);
+      actions.appendChild(fixAllBtn);
+    } else {
+      actions.appendChild(document.createElement('div'));
+    }
+
+    const closeBtn = document.createElement('button');
+    closeBtn.className = 'polyglot-btn-sm';
+    closeBtn.id = 'polyglot-btn-close-list';
+    closeBtn.title = 'Close';
+    closeBtn.textContent = 'Close';
+    actions.appendChild(closeBtn);
+
+    popup.appendChild(header);
+    popup.appendChild(fixesList);
+    popup.appendChild(actions);
 
     const applySingleCorrection = (c: GrammarCorrection) => {
       const resolvedTarget =
@@ -414,13 +530,10 @@ export class CorrectionPopup {
       });
     }
 
-    const closeBtn = popup.querySelector('#polyglot-btn-close-list');
-    if (closeBtn) {
-      closeBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        this.close();
-      });
-    }
+    closeBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.close();
+    });
 
     popup.addEventListener('mousedown', (e) => {
       e.stopPropagation();
